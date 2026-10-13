@@ -4,6 +4,7 @@ export default defineConfig({
 	test: {
 		environment: 'node',
 		include: [
+			'test/init-authorization.spec.js',
 			'test/self-hosted-mail-service.spec.js',
 			'test/mail-provider.spec.js',
 			'test/setting-service.spec.js',

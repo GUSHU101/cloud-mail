@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.0.1 - 2026-10-14
+
+### Security
+
+- Replaced the URL-embedded database initialization secret with an authenticated `POST /api/init` request using a Bearer Worker Secret.
+- Added fail-closed initialization authorization tests and no-store responses.
+
 ## v4.0.0 - 2026-10-14
 
 ### Added

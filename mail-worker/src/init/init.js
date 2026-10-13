@@ -2,13 +2,30 @@ import settingService from '../service/setting-service';
 import emailUtils from '../utils/email-utils';
 import {emailConst} from "../const/entity-const";
 
+const encoder = new TextEncoder();
+
+function constantTimeEqual(leftValue, rightValue) {
+	const left = encoder.encode(String(leftValue || ''));
+	const right = encoder.encode(String(rightValue || ''));
+	let difference = left.length ^ right.length;
+	const length = Math.max(left.length, right.length);
+	for (let index = 0; index < length; index++) {
+		difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
+	}
+	return difference === 0;
+}
+
+function isAuthorizedInitRequest(c) {
+	const expected = String(c.env.jwt_secret || '');
+	const authorization = String(c.req.header('authorization') || '');
+	const match = authorization.match(/^Bearer ([A-Za-z0-9_-]{32,})$/);
+	return expected.length >= 32 && !!match && constantTimeEqual(match[1], expected);
+}
+
 const dbInit = {
 	async init(c) {
-
-		const secret = c.req.param('secret');
-
-		if (secret !== c.env.jwt_secret) {
-			return c.text('❌ JWT secret mismatch');
+		if (!isAuthorizedInitRequest(c)) {
+			return c.text('Unauthorized', 401, { 'cache-control': 'no-store' });
 		}
 
 		await this.intDB(c);
@@ -34,7 +51,7 @@ const dbInit = {
 		await this.v3_3DB(c);
 		await this.v3_4DB(c);
 		await settingService.refresh(c);
-		return c.text('success');
+		return c.text('success', 200, { 'cache-control': 'no-store' });
 	},
 
 	async v3_4DB(c) {
@@ -766,4 +783,4 @@ const dbInit = {
 		await c.env.db.batch(queryList);
 	}
 };
-export { dbInit };
+export { constantTimeEqual, dbInit, isAuthorizedInitRequest };

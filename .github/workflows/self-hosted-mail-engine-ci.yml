@@ -1,6 +1,7 @@
 name: Self-hosted mail engine CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
