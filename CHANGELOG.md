@@ -6,6 +6,7 @@
 
 - Replaced the URL-embedded database initialization secret with an authenticated `POST /api/init` request using a Bearer Worker Secret.
 - Added fail-closed initialization authorization tests and no-store responses.
+- Updated GitHub Actions runtimes to current Node 24-based releases.
 
 ## v4.0.0 - 2026-10-14
 
