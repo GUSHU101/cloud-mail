@@ -94,11 +94,13 @@
 
 - **文件存储**：[Cloudflare R2](https://developers.cloudflare.com/r2/)
 
-## 完全自建发信
+## LONGOS 一体化自建发信
 
-如不希望依赖付费邮件平台，可在自己的服务器部署仓库内的 [`mail-relay`](./mail-relay/README.md)。Cloudflare Worker 通过带 HMAC 签名的 HTTPS 请求提交邮件，服务器使用 Postfix 和 OpenDKIM 直接投递到收件方 MX。
+如 Cloud Mail 与 LONGOS 配套使用，运行 LONGOS 根目录的 `./install.sh` 时会随网站自动构建并启动 Postfix/OpenDKIM；不需要进入 `mail-relay` 目录，也不需要单独部署第二套服务。Cloudflare Worker 通过 LONGOS 网站的 `https://站点域名/_longos/mail-relay` 提交 HMAC 签名请求。
 
-自建模式需要固定公网 IP、可设置 PTR/rDNS，并且服务器允许出站 TCP 25。API 密钥只保存在服务器环境变量和 Cloudflare Worker secret 中，不写入网页或 D1。
+在本仓库 GitHub Actions 中配置 `LONGOS_RELAY_URL`，并把 LONGOS `.env` 的 `MAIL_RELAY_SHARED_SECRET` 保存为同名的 `RELAY_SHARED_SECRET` 后，工作流会自动写入 Worker，后台“自动”模式会优先使用 LONGOS 内置引擎。独立使用 Cloud Mail、未安装 LONGOS 时，仍可按 [`mail-relay`](./mail-relay/README.md) 的通用方式部署。
+
+自建模式仍需要固定公网 IP、可设置 PTR/rDNS，并且服务器允许出站 TCP 25。API 密钥只保存在 LONGOS 服务器环境变量、GitHub Secret 和 Cloudflare Worker Secret 中，不写入网页或 D1。
 
 ## 目录结构
 

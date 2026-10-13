@@ -28,6 +28,8 @@ jobs:
       AI_MODEL: ${{ secrets.AI_MODEL || vars.AI_MODEL || '@cf/meta/llama-3.1-8b-instruct-fast' }}
       CLOUDFLARE_EMAIL: ${{ secrets.CF_EMAIL || vars.CF_EMAIL || false }}
       ANALYSIS_CACHE: ${{ secrets.ANALYSIS_CACHE || vars.ANALYSIS_CACHE || false }}
+      LONGOS_RELAY_URL: ${{ secrets.LONGOS_RELAY_URL || vars.LONGOS_RELAY_URL }}
+      RELAY_SHARED_SECRET: ${{ secrets.RELAY_SHARED_SECRET }}
 
 
     outputs:
@@ -92,6 +94,17 @@ jobs:
           if [ -z "$CUSTOM_DOMAIN" ]; then
             echo "::warning:: CUSTOM_DOMAIN variable is not set."
           fi
+
+          if [ -n "$LONGOS_RELAY_URL" ]; then
+            if [[ ! "$LONGOS_RELAY_URL" =~ ^https://[A-Za-z0-9.-]+(/[_A-Za-z0-9./-]*)?$ ]]; then
+              echo "❌ LONGOS_RELAY_URL must be a safe HTTPS URL."
+              exit 1
+            fi
+            if [ ${#RELAY_SHARED_SECRET} -lt 32 ]; then
+              echo "❌ RELAY_SHARED_SECRET must contain at least 32 characters when LONGOS_RELAY_URL is configured."
+              exit 1
+            fi
+          fi
           
           CONFIG_FILE="wrangler-action.toml"
           
@@ -124,6 +137,7 @@ jobs:
           sed -i "s|\${PROJECT_LINK}|${PROJECT_LINK}|g" "$CONFIG_FILE"
           sed -i "s|\${ANALYSIS_CACHE}|${ANALYSIS_CACHE}|g" "$CONFIG_FILE"
           sed -i "s|\${AI_MODEL}|${AI_MODEL}|g" "$CONFIG_FILE"
+          sed -i "s|\${LONGOS_RELAY_URL}|${LONGOS_RELAY_URL}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CLIENT_ID}|${LINUXDO_CLIENT_ID}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CLIENT_SECRET}|${LINUXDO_CLIENT_SECRET}|g" "$CONFIG_FILE"
           sed -i "s|\${LINUXDO_CALLBACK_URL}|${LINUXDO_CALLBACK_URL}|g" "$CONFIG_FILE"
@@ -230,6 +244,12 @@ jobs:
           
           echo "worker_url=$WORKER_URL" >> $GITHUB_OUTPUT
           echo "✅ Setup completed."
+
+      - name: 🔐 配置内置邮件中继密钥 / Configure relay secret
+        if: ${{ env.RELAY_SHARED_SECRET != '' }}
+        working-directory: ./mail-worker
+        run: |
+          printf '%s' "$RELAY_SHARED_SECRET" | pnpm wrangler secret put RELAY_SHARED_SECRET -c wrangler-action.toml
 
       - name: ♻️ 初始化数据库 / Initialize database
         run: |

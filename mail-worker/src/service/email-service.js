@@ -24,6 +24,7 @@ import account from "../entity/account";
 import { att } from '../entity/att';
 import telegramService from './telegram-service';
 import selfHostedMailService from './self-hosted-mail-service';
+import { selectExternalMailProvider } from './mail-provider';
 
 const emailService = {
 
@@ -333,11 +334,13 @@ const emailService = {
 		let selectedProvider = 'internal';
 
 		if (!allInternal) {
-			if (mailEngine === 'auto') {
-				selectedProvider = useCloudflareEmail ? 'cloudflare' : (resendToken ? 'resend' : '');
-			} else {
-				selectedProvider = mailEngine;
-			}
+			selectedProvider = selectExternalMailProvider({
+				mailEngine,
+				relayUrl,
+				hasRelaySecret: !!c.env.RELAY_SHARED_SECRET,
+				useCloudflareEmail,
+				hasResendToken: !!resendToken,
+			});
 
 			if (selectedProvider === 'cloudflare' && !useCloudflareEmail) {
 				throw new BizError(t('noCloudflareEmailBinding'));

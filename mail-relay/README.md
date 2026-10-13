@@ -12,6 +12,8 @@
 
 ## 部署
 
+如果你使用 LONGOS，无需执行本节：LONGOS 的 `./install.sh` 已把相同组件并入网站 Docker Compose，并通过 `/_longos/mail-relay` 提供 HTTPS 入口。本节只用于不安装 LONGOS 的独立 Cloud Mail 环境。
+
 ```bash
 cd mail-relay
 cp .env.example .env

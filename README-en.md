@@ -87,11 +87,13 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **File Storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/)
 
-## Fully self-hosted sending
+## Integrated LONGOS self-hosted sending
 
-To avoid paid email delivery providers, deploy the repository's [`mail-relay`](./mail-relay/README.md) on your own server. The Cloudflare Worker submits HMAC-signed HTTPS requests, and Postfix with OpenDKIM delivers directly to recipient MX servers.
+When Cloud Mail is paired with LONGOS, LONGOS `./install.sh` builds and starts Postfix/OpenDKIM together with the website. There is no second relay deployment. The Worker submits HMAC-signed requests to `https://your-longos-site/_longos/mail-relay`.
 
-Self-hosting requires a static public IP, configurable PTR/rDNS, and outbound TCP port 25. The shared secret is stored only in server environment variables and a Cloudflare Worker secret, never in the browser or D1.
+Set `LONGOS_RELAY_URL` and a matching `RELAY_SHARED_SECRET` in this repository's GitHub Actions settings. The deployment workflow installs the Worker secret automatically and Auto mode prefers the LONGOS engine. Standalone Cloud Mail deployments can still use the generic [`mail-relay`](./mail-relay/README.md) procedure.
+
+Self-hosting still requires a static public IP, configurable PTR/rDNS, and outbound TCP port 25. The shared secret is stored only in LONGOS server configuration, GitHub Secrets, and the Cloudflare Worker secret, never in the browser or D1.
 
 ## Project Structure
 

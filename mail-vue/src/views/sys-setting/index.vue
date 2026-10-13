@@ -546,7 +546,7 @@
       <el-dialog v-model="selfHostedRelayShow" :title="$t('selfHostedRelay')" width="420"
                  @closed="relayUrlInput = setting.relayUrl || ''">
         <form @submit.prevent>
-          <el-input type="url" placeholder="https://relay-api.example.com" v-model="relayUrlInput"
+          <el-input type="url" placeholder="https://shop.example.com/_longos/mail-relay" v-model="relayUrlInput"
                     @keyup.enter="saveSelfHostedRelay"/>
           <el-alert
               style="margin-top: 15px"

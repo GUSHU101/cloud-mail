@@ -43,6 +43,7 @@ domain = "${DOMAIN}"
 admin = "${ADMIN}"
 jwt_secret = "${JWT_SECRET}"
 project_link = "${PROJECT_LINK}"
+longos_relay_url = "${LONGOS_RELAY_URL}"
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"

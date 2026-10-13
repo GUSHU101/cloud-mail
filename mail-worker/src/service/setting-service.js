@@ -12,11 +12,19 @@ import userContext from '../security/user-context';
 import domainUtils from '../utils/domain-uitls';
 
 const settingService = {
+	applyRuntimeMailDefaults(c, settingRow) {
+		const runtimeSetting = { ...settingRow };
+		const longosRelayUrl = String(c.env.longos_relay_url || '').trim().replace(/\/$/, '');
+		if (!runtimeSetting.relayUrl && longosRelayUrl) {
+			runtimeSetting.relayUrl = longosRelayUrl;
+		}
+		return runtimeSetting;
+	},
 
 	async refresh(c) {
 		const settingRow = await orm(c).select().from(setting).get();
 		settingRow.resendTokens = JSON.parse(settingRow.resendTokens);
-		c.set('setting', settingRow);
+		c.set('setting', this.applyRuntimeMailDefaults(c, settingRow));
 		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
 	},
 
@@ -26,11 +34,13 @@ const settingService = {
 			return c.get('setting')
 		}
 
-		const setting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+		const storedSetting = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
 
-		if (!setting) {
+		if (!storedSetting) {
 			throw new BizError('数据库未初始化 Database not initialized.');
 		}
+
+		const setting = this.applyRuntimeMailDefaults(c, storedSetting);
 
 		let domainList = c.env.domain;
 
