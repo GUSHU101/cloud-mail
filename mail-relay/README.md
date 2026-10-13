@@ -75,6 +75,8 @@ cd ../mail-worker
 printf '%s' '你的随机密钥' | npx wrangler secret put RELAY_SHARED_SECRET
 ```
 
+单独部署 Cloud Mail 时可使用兼容的 `RELAY_SHARED_SECRET`。多客户端环境建议改用 `LONGOS_RELAY_SHARED_SECRET` 和 `CLOUD_MAIL_RELAY_SHARED_SECRET` 隔离密钥；三个变量中至少配置一个，且长度不少于 32 个字符。
+
 然后运行一次 Cloud Mail 数据库初始化/升级，在系统设置中选择“自建邮件服务器”，填写：
 
 ```text

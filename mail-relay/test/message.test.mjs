@@ -8,7 +8,23 @@ process.env.CLOUD_MAIL_RELAY_SHARED_SECRET = 'cloud-mail-cloud-mail-cloud-123456
 process.env.ALLOWED_SENDER_DOMAINS = 'mail.example.com';
 process.env.RELAY_NO_LISTEN = 'true';
 
-const { normalizeMessage, server } = await import('../src/server.mjs');
+const { normalizeAddress, normalizeMessage, server } = await import('../src/server.mjs');
+
+test('normalizes safe mailbox syntax and rejects address-list injection', () => {
+  assert.equal(normalizeAddress('sales+orders@MAIL.EXAMPLE.COM', 'sender'), 'sales+orders@mail.example.com');
+  assert.throws(
+    () => normalizeAddress('first@example.com,second@example.com', 'sender'),
+    error => error.status === 400,
+  );
+  assert.throws(
+    () => normalizeAddress('sender@-invalid.example', 'sender'),
+    error => error.status === 400,
+  );
+  assert.throws(
+    () => normalizeAddress('nul\0byte@mail.example.com', 'sender'),
+    error => error.status === 400,
+  );
+});
 
 test('normalizes all recipient classes and anchors rate limiting to the sender', () => {
   const result = normalizeMessage({
@@ -34,6 +50,22 @@ test('rejects a sender outside the signing allowlist', () => {
     subject: 'Hello',
     text: 'Body',
   }), error => error.status === 403);
+});
+
+test('rejects malformed header and body value types as client errors', () => {
+  const base = {
+    from: { address: 'sales@mail.example.com' },
+    to: ['to@example.net'],
+    subject: 'Hello',
+  };
+  assert.throws(
+    () => normalizeMessage({ ...base, text: 'Body', headers: null }),
+    error => error.status === 400 && error.message === 'Headers must be an object',
+  );
+  assert.throws(
+    () => normalizeMessage({ ...base, text: 42 }),
+    error => error.status === 400 && error.message === 'Message text or HTML is required',
+  );
 });
 
 test('rejects a valid client signature with a mismatched sender context', async () => {

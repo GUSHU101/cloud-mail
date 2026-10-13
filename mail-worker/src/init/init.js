@@ -49,7 +49,11 @@ const dbInit = {
 			try {
 				await c.env.db.prepare(statement).run();
 			} catch (e) {
-				console.warn(`跳过字段：${e.message}`);
+				if (/duplicate column name/i.test(String(e.message || ''))) {
+					console.info(`字段已存在，跳过：${e.message}`);
+					continue;
+				}
+				throw e;
 			}
 		}
 	},

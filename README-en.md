@@ -6,20 +6,20 @@
        <a href="/README.md" style="margin-left: 5px">简体中文</a> | English 
     </p>
     <p align="center">
-        <a href="https://github.com/maillab/cloud-mail/tree/main?tab=MIT-1-ov-file" target="_blank" >
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/blob/main/LICENSE" target="_blank" >
             <img src="https://img.shields.io/badge/license-MIT-green" />
         </a>    
-        <a href="https://github.com/maillab/cloud-mail/releases" target="_blank" >
-            <img src="https://img.shields.io/github/v/release/maillab/cloud-mail" alt="releases" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/releases" target="_blank" >
+            <img src="https://img.shields.io/github/v/release/GUSHU101/longos-cloud-mail" alt="releases" />
         </a>  
-        <a href="https://github.com/maillab/cloud-mail/issues" >
-            <img src="https://img.shields.io/github/issues/maillab/cloud-mail" alt="issues" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/issues" >
+            <img src="https://img.shields.io/github/issues/GUSHU101/longos-cloud-mail" alt="issues" />
         </a>  
-        <a href="https://github.com/maillab/cloud-mail/stargazers" target="_blank">
-            <img src="https://img.shields.io/github/stars/maillab/cloud-mail" alt="stargazers" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/stargazers" target="_blank">
+            <img src="https://img.shields.io/github/stars/GUSHU101/longos-cloud-mail" alt="stargazers" />
         </a>  
-        <a href="https://github.com/maillab/cloud-mail/forks" target="_blank" >
-            <img src="https://img.shields.io/github/forks/maillab/cloud-mail" alt="forks" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/forks" target="_blank" >
+            <img src="https://img.shields.io/github/forks/GUSHU101/longos-cloud-mail" alt="forks" />
         </a>
     </p>
     <p align="center">
@@ -31,6 +31,8 @@
 
 ## Description
 With only one domain, you can create multiple different email addresses, similar to major email platforms. This project can be deployed on Cloudflare Workers to reduce server costs and build your own email service.
+
+This distribution retains the upstream license and attribution for [maillab/cloud-mail](https://github.com/maillab/cloud-mail) and adds the LONGOS self-hosted mail engine. Its canonical repository is [GUSHU101/longos-cloud-mail](https://github.com/GUSHU101/longos-cloud-mail). Current stable release: **v4.0.0**.
 ## Project Showcase
 
 - [Live Demo](https://skymail.ink)<br>
@@ -91,7 +93,7 @@ With only one domain, you can create multiple different email addresses, similar
 
 When Cloud Mail is paired with LONGOS, LONGOS `./install.sh` builds and starts Postfix/OpenDKIM together with the website. There is no second relay deployment. The Worker submits HMAC-signed requests to `https://your-longos-site/_longos/mail-relay`.
 
-Set `LONGOS_RELAY_URL` and save LONGOS's `CLOUD_MAIL_RELAY_SHARED_SECRET` as `RELAY_SHARED_SECRET` in this repository's GitHub Actions settings. The deployment workflow installs the Worker secret automatically and Auto mode prefers the LONGOS engine. LONGOS and Cloud Mail use separate signing keys. Standalone Cloud Mail deployments can still use the generic [`mail-relay`](./mail-relay/README.md) procedure.
+Set `LONGOS_RELAY_URL` and save LONGOS's `CLOUD_MAIL_RELAY_SHARED_SECRET` as `RELAY_SHARED_SECRET` in this repository's GitHub Actions settings, then manually run `Deploy cloud-mail to Cloudflare Workers` from `main`. The deployment workflow installs the Worker secret automatically and Auto mode prefers the LONGOS engine. Keep Cloudflare Git Builds disabled so two deployment systems cannot overwrite the same Worker. LONGOS and Cloud Mail use separate signing keys. Standalone Cloud Mail deployments can still use the generic [`mail-relay`](./mail-relay/README.md) procedure.
 
 The `From` identity always comes from the Cloud Mail account selected by the user. The Worker verifies that the account belongs to that user and that its domain is allowed by the assigned role; the LONGOS relay does not replace it with a platform-wide default address.
 

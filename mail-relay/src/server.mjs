@@ -2,6 +2,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { domainToASCII } from 'node:url';
 import nodemailer from 'nodemailer';
 import { verifySignedRequest } from './security.mjs';
 
@@ -20,8 +21,9 @@ const signatureWindowSeconds = toPositiveInt(process.env.SIGNATURE_WINDOW_SECOND
 const allowedSenderDomains = new Set(
   (process.env.ALLOWED_SENDER_DOMAINS || '')
     .split(',')
-    .map(value => value.trim().toLowerCase())
-    .filter(Boolean),
+    .map(value => value.trim())
+    .filter(Boolean)
+    .map(normalizeDomain),
 );
 
 if (clientSecrets.size === 0) {
@@ -127,15 +129,39 @@ function cleanHeader(value, field, maxLength = 998) {
   return normalized;
 }
 
+function normalizeDomain(value) {
+  const domain = domainToASCII(String(value ?? '').trim().toLowerCase());
+  const labels = domain.split('.');
+  if (
+    !domain
+    || domain.length > 253
+    || labels.length < 2
+    || labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))
+  ) {
+    const error = new Error('Invalid email domain');
+    error.status = 400;
+    throw error;
+  }
+  return domain;
+}
+
 function normalizeAddress(value, field) {
   const address = cleanHeader(value, field, 320);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+  const separator = address.lastIndexOf('@');
+  const local = address.slice(0, separator);
+  if (
+    separator <= 0
+    || local.length > 64
+    || !/^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+$/.test(local)
+    || local.startsWith('.')
+    || local.endsWith('.')
+    || local.includes('..')
+  ) {
     const error = new Error(`Invalid ${field}`);
     error.status = 400;
     throw error;
   }
-  const separator = address.lastIndexOf('@');
-  return `${address.slice(0, separator)}@${address.slice(separator + 1).toLowerCase()}`;
+  return `${local}@${normalizeDomain(address.slice(separator + 1))}`;
 }
 
 function normalizeAddressList(value, field) {
@@ -203,6 +229,11 @@ function normalizeMessage(body) {
 
   const subject = cleanHeader(body.subject, 'subject');
   const fromName = cleanHeader(body.from?.name || '', 'from name', 200);
+  if (body.headers !== undefined && (!body.headers || typeof body.headers !== 'object' || Array.isArray(body.headers))) {
+    const error = new Error('Headers must be an object');
+    error.status = 400;
+    throw error;
+  }
   const headers = {};
   for (const [name, value] of Object.entries(body.headers || {})) {
     const lowerName = name.toLowerCase();
@@ -245,7 +276,9 @@ function normalizeMessage(body) {
     };
   });
 
-  if (!body.text && !body.html) {
+  const text = typeof body.text === 'string' ? body.text : undefined;
+  const html = typeof body.html === 'string' ? body.html : undefined;
+  if (!text && !html) {
     const error = new Error('Message text or HTML is required');
     error.status = 400;
     throw error;
@@ -265,8 +298,8 @@ function normalizeMessage(body) {
       cc,
       bcc,
       subject,
-      text: typeof body.text === 'string' ? body.text : undefined,
-      html: typeof body.html === 'string' ? body.html : undefined,
+      text,
+      html,
       headers,
       attachments,
       messageId: `<${requestId}@${fromDomain}>`,
@@ -275,6 +308,9 @@ function normalizeMessage(body) {
 }
 
 async function handleSend(request, response) {
+  if (!/^application\/json(?:\s*;|$)/i.test(String(request.headers['content-type'] || ''))) {
+    return json(response, 415, { accepted: false, message: 'Content-Type must be application/json' });
+  }
   const rawBody = await readBody(request);
   const relayClient = cleanHeader(request.headers['x-relay-client'] || (legacySharedSecret ? 'legacy' : ''), 'relay client', 32);
   const secret = relayClient === 'legacy' ? legacySharedSecret : clientSecrets.get(relayClient);
@@ -296,19 +332,24 @@ async function handleSend(request, response) {
   if (relayClient !== 'legacy' && senderContext.source !== relayClient) {
     return json(response, 403, { accepted: false, message: 'Relay client does not match sender context' });
   }
-  const previous = completedRequests.get(requestId);
+  const replayKey = `${relayClient}:${requestId}`;
+  const payloadHash = crypto.createHash('sha256').update(rawBody).digest('hex');
+  const previous = completedRequests.get(replayKey);
   if (previous) {
+    if (previous.payloadHash !== payloadHash) {
+      return json(response, 409, { accepted: false, message: 'Request ID was already used for different content' });
+    }
     return json(response, 202, previous.body);
   }
 
-  if (inFlightRequests.has(requestId)) {
+  if (inFlightRequests.has(replayKey)) {
     return json(response, 409, { accepted: false, message: 'Request is already being processed' });
   }
   if (rateLimitExceeded(rateKey)) {
     return json(response, 429, { accepted: false, message: 'Rate limit exceeded' });
   }
 
-  inFlightRequests.add(requestId);
+  inFlightRequests.add(replayKey);
   try {
     const info = await transporter.sendMail(mail);
     const result = {
@@ -316,7 +357,11 @@ async function handleSend(request, response) {
       queueId: requestId,
       messageId: info.messageId || mail.messageId,
     };
-    completedRequests.set(requestId, { createdAt: Date.now(), body: result });
+    completedRequests.set(replayKey, {
+      createdAt: Date.now(),
+      payloadHash,
+      body: result,
+    });
     console.info(JSON.stringify({
       event: 'mail_queued',
       queueId: requestId,
@@ -329,7 +374,7 @@ async function handleSend(request, response) {
     }));
     return json(response, 202, result);
   } finally {
-    inFlightRequests.delete(requestId);
+    inFlightRequests.delete(replayKey);
   }
 }
 
@@ -357,6 +402,10 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
+server.headersTimeout = 10_000;
+server.requestTimeout = 30_000;
+server.keepAliveTimeout = 5_000;
+
 if (process.env.RELAY_NO_LISTEN !== 'true') {
   server.listen(port, '0.0.0.0', () => {
     console.info(JSON.stringify({ event: 'relay_started', port, allowedSenderDomains: [...allowedSenderDomains] }));
@@ -371,4 +420,4 @@ function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-export { normalizeMessage, server };
+export { normalizeAddress, normalizeDomain, normalizeMessage, server };

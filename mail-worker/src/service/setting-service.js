@@ -11,10 +11,32 @@ import verifyRecordService from './verify-record-service';
 import userContext from '../security/user-context';
 import domainUtils from '../utils/domain-uitls';
 
+function normalizeRelayUrl(value) {
+	const normalized = String(value || '').trim().replace(/\/+$/, '');
+	if (!normalized) return '';
+
+	let relayUrl;
+	try {
+		relayUrl = new URL(normalized);
+	} catch {
+		throw new BizError('Invalid self-hosted relay URL');
+	}
+	if (relayUrl.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(relayUrl.hostname)) {
+		throw new BizError('Self-hosted relay URL must use HTTPS');
+	}
+	if (relayUrl.username || relayUrl.password) {
+		throw new BizError('Self-hosted relay URL must not contain credentials');
+	}
+	if (relayUrl.search || relayUrl.hash) {
+		throw new BizError('Self-hosted relay URL must not contain a query or fragment');
+	}
+	return normalized;
+}
+
 const settingService = {
 	applyRuntimeMailDefaults(c, settingRow) {
 		const runtimeSetting = { ...settingRow };
-		const longosRelayUrl = String(c.env.longos_relay_url || '').trim().replace(/\/$/, '');
+		const longosRelayUrl = normalizeRelayUrl(c.env.longos_relay_url);
 		if (!runtimeSetting.relayUrl && longosRelayUrl) {
 			runtimeSetting.relayUrl = longosRelayUrl;
 		}
@@ -128,18 +150,7 @@ const settingService = {
 			throw new BizError('Invalid mail engine');
 		}
 		if (params.relayUrl !== undefined) {
-			params.relayUrl = String(params.relayUrl || '').trim().replace(/\/$/, '');
-			if (params.relayUrl) {
-				let relayUrl;
-				try {
-					relayUrl = new URL(params.relayUrl);
-				} catch {
-					throw new BizError('Invalid self-hosted relay URL');
-				}
-				if (relayUrl.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(relayUrl.hostname)) {
-					throw new BizError('Self-hosted relay URL must use HTTPS');
-				}
-			}
+			params.relayUrl = normalizeRelayUrl(params.relayUrl);
 		}
 		let resendTokens = { ...settingData.resendTokens, ...params.resendTokens };
 		Object.keys(resendTokens).forEach(domain => {
@@ -261,4 +272,5 @@ const settingService = {
 
 };
 
+export { normalizeRelayUrl };
 export default settingService;

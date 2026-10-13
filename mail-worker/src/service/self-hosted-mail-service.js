@@ -35,6 +35,9 @@ function endpointFor(relayUrl, path = 'v1/send') {
 	if (url.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(url.hostname)) {
 		throw new BizError('Self-hosted relay URL must use HTTPS');
 	}
+	if (url.username || url.password) {
+		throw new BizError('Self-hosted relay URL must not contain credentials');
+	}
 
 	url.pathname = `${url.pathname.replace(/\/$/, '')}/${path}`;
 	url.search = '';
@@ -50,6 +53,9 @@ const selfHostedMailService = {
 		}
 		if (!secret) {
 			throw new BizError('RELAY_SHARED_SECRET is not configured');
+		}
+		if (secret.length < 32) {
+			throw new BizError('RELAY_SHARED_SECRET must contain at least 32 characters');
 		}
 
 		const payload = JSON.stringify(params);

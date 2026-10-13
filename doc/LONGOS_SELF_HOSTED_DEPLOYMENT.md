@@ -151,7 +151,7 @@ Settings -> Secrets and variables -> Actions
 | `JWT_SECRET` | 至少 32 位随机值，可用 `openssl rand -hex 32` 生成 |
 | `RELAY_SHARED_SECRET` | LONGOS `.env` 中 `CLOUD_MAIL_RELAY_SHARED_SECRET` 的原值 |
 
-`RELAY_SHARED_SECRET` 必须与 LONGOS 的 Cloud Mail 专用密钥逐字一致，不能填 `MAIL_RELAY_SHARED_SECRET`。工作流会把该值直接写入 Cloudflare Worker Secret，不会放入 `wrangler.toml`、网页或数据库。
+`RELAY_SHARED_SECRET` 必须与 LONGOS 的 Cloud Mail 专用密钥逐字一致，不能填 `MAIL_RELAY_SHARED_SECRET`。工作流会把 `JWT_SECRET` 和 `RELAY_SHARED_SECRET` 直接写入 Cloudflare Worker Secret，不会放入 `wrangler.toml`、网页或数据库。
 
 首次部署可以不填 `D1_DATABASE_ID` 和 `KV_NAMESPACE_ID`；工作流会优先查找与 `NAME` 同名的现有资源，不存在时才创建。已有生产数据时，建议显式填写原 D1/KV ID，避免绑定到新资源。
 
@@ -161,32 +161,32 @@ Settings -> Secrets and variables -> Actions
 curl -fsS https://admin.example.com/_longos/mail-relay/health
 ```
 
-## 6. 从 GitHub 部署功能分支
+## 6. 从 GitHub 部署正式版
 
-当前功能分支：
+正式代码位于：
 
 ```text
-feature/self-hosted-mail-engine
+main
 ```
 
-GitHub Actions 只会在默认分支上注册可手动运行的工作流。因此仓库的 `main` 分支提供 `Deploy self-hosted mail engine` 入口，它会调用功能分支中的部署工作流，并显式检出 `feature/self-hosted-mail-engine`。
+生产部署为手动、失败即停的 GitHub Actions 工作流。代码推送到 `main` 只执行测试，不会在密钥或绑定未校验时自动覆盖生产 Worker。
 
 GitHub 页面操作：
 
 1. 进入 `Actions`；
-2. 选择 `Deploy self-hosted mail engine`；
+2. 选择 `Deploy cloud-mail to Cloudflare Workers`；
 3. 点击 `Run workflow`；
-4. 运行入口保持 `main`，不要改选功能分支；
+4. 分支保持 `main`；
 5. 等待构建、D1/KV 绑定、Worker 生产部署、Secret 写入和数据库初始化全部成功。
 
 也可以使用 GitHub CLI：
 
 ```bash
-gh workflow run deploy-self-hosted-mail-engine.yml --ref main
+gh workflow run deploy-cloudflare.yml --ref main --repo GUSHU101/longos-cloud-mail
 gh run watch --exit-status
 ```
 
-功能分支不会因为 Cloudflare 页面显示“构建就绪”而自动进入生产。Cloudflare Git Builds 对非生产分支默认执行：
+不要同时使用 Cloudflare Git Builds 和 GitHub Actions 部署同一个 Worker。本项目的一体化方案使用 GitHub Actions，因此应在 Cloudflare Worker 的 `Settings -> Builds` 中打开 `Disable builds`。Cloudflare Git Builds 的非生产分支默认执行：
 
 ```text
 npx wrangler versions upload

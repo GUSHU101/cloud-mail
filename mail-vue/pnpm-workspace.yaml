@@ -4,3 +4,10 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   vue-demi: true
+minimumReleaseAgeExclude:
+  - caniuse-lite@1.0.30001816
+overrides:
+  browserslist: 4.29.3
+  caniuse-lite: 1.0.30001816
+  defu: 6.1.5
+  source-map-js: 1.2.2

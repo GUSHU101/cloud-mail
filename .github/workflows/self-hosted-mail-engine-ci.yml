@@ -3,6 +3,7 @@ name: Self-hosted mail engine CI
 on:
   push:
     branches:
+      - main
       - feature/self-hosted-mail-engine
     paths:
       - "mail-relay/**"

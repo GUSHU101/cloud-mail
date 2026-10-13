@@ -6,20 +6,20 @@
         简体中文 | <a href="/README-en.md" style="margin-left: 5px">English </a>
     </p>
     <p align="center">
-        <a href="https://github.com/maillab/cloud-mail/tree/main?tab=MIT-1-ov-file" target="_blank" >
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/blob/main/LICENSE" target="_blank" >
             <img src="https://img.shields.io/badge/license-MIT-green" />
         </a>    
-        <a href="https://github.com/maillab/cloud-mail/releases" target="_blank" >
-            <img src="https://img.shields.io/github/v/release/maillab/cloud-mail" alt="releases" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/releases" target="_blank" >
+            <img src="https://img.shields.io/github/v/release/GUSHU101/longos-cloud-mail" alt="releases" />
         </a>  
-        <a href="https://github.com/maillab/cloud-mail/issues" >
-            <img src="https://img.shields.io/github/issues/maillab/cloud-mail" alt="issues" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/issues" >
+            <img src="https://img.shields.io/github/issues/GUSHU101/longos-cloud-mail" alt="issues" />
         </a>  
-        <a href="https://github.com/maillab/cloud-mail/stargazers" target="_blank">
-            <img src="https://img.shields.io/github/stars/maillab/cloud-mail" alt="stargazers" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/stargazers" target="_blank">
+            <img src="https://img.shields.io/github/stars/GUSHU101/longos-cloud-mail" alt="stargazers" />
         </a>  
-        <a href="https://github.com/maillab/cloud-mail/forks" target="_blank" >
-            <img src="https://img.shields.io/github/forks/maillab/cloud-mail" alt="forks" />
+        <a href="https://github.com/GUSHU101/longos-cloud-mail/forks" target="_blank" >
+            <img src="https://img.shields.io/github/forks/GUSHU101/longos-cloud-mail" alt="forks" />
         </a>
     </p>
     <p align="center">
@@ -32,7 +32,9 @@
 
 ## 项目简介
 
-只需要一个域名，就可以创建多个不同的邮箱，类似各大邮箱平台，本项目支持署到 Cloudflare Workers ，降低服务器成本，搭建自己的邮箱服务
+只需要一个域名，就可以创建多个不同的邮箱，类似各大邮箱平台。本项目支持部署到 Cloudflare Workers，降低服务器成本，搭建自己的邮箱服务。
+
+本发行版保留 [maillab/cloud-mail](https://github.com/maillab/cloud-mail) 的上游授权与来源说明，并集成 LONGOS 自建邮件引擎。新版独立仓库为 [GUSHU101/longos-cloud-mail](https://github.com/GUSHU101/longos-cloud-mail)，当前正式版本：**v4.0.0**。
 
 ## 项目展示
 
@@ -100,7 +102,7 @@
 
 完整的服务器要求、首次安装、Cloudflare/GitHub Actions 变量、DNS/PTR、租户发件域、升级与故障排查请参阅：[Cloud Mail + LONGOS 一体化自建邮件部署与升级](./doc/LONGOS_SELF_HOSTED_DEPLOYMENT.md)。
 
-在本仓库 GitHub Actions 中配置 `LONGOS_RELAY_URL`，并把 LONGOS `.env` 的 `CLOUD_MAIL_RELAY_SHARED_SECRET` 保存为同名的 `RELAY_SHARED_SECRET` 后，从默认分支手动运行 `Deploy self-hosted mail engine`。工作流会检出功能分支、完成生产部署并写入 Worker Secret，后台“自动”模式会优先使用 LONGOS 内置引擎。LONGOS 应用和 Cloud Mail 使用不同的签名密钥。独立使用 Cloud Mail、未安装 LONGOS 时，仍可按 [`mail-relay`](./mail-relay/README.md) 的通用方式部署。
+在本仓库 GitHub Actions 中配置 `LONGOS_RELAY_URL`，并把 LONGOS `.env` 的 `CLOUD_MAIL_RELAY_SHARED_SECRET` 保存为同名的 `RELAY_SHARED_SECRET` 后，从 `main` 分支手动运行 `Deploy cloud-mail to Cloudflare Workers`。工作流会完成生产部署并写入 Worker Secret，后台“自动”模式会优先使用 LONGOS 内置引擎。Cloudflare Git Builds 应保持禁用，避免两套流程同时覆盖 Worker。LONGOS 应用和 Cloud Mail 使用不同的签名密钥。独立使用 Cloud Mail、未安装 LONGOS 时，仍可按 [`mail-relay`](./mail-relay/README.md) 的通用方式部署。
 
 发件时的 `From` 始终来自用户当前选中的 Cloud Mail 账户。Worker 会校验该账户属于当前用户且其域名在角色权限内，不会统一改写成 LONGOS 的默认邮箱。
 

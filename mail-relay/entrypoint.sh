@@ -3,7 +3,13 @@ set -eu
 
 : "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}"
 : "${MAIL_DOMAINS:?MAIL_DOMAINS is required}"
-: "${RELAY_SHARED_SECRET:?RELAY_SHARED_SECRET is required}"
+
+if [ -z "${RELAY_SHARED_SECRET:-}" ] \
+  && [ -z "${LONGOS_RELAY_SHARED_SECRET:-}" ] \
+  && [ -z "${CLOUD_MAIL_RELAY_SHARED_SECRET:-}" ]; then
+  echo "At least one relay client secret is required" >&2
+  exit 1
+fi
 
 DKIM_SELECTOR="${DKIM_SELECTOR:-mail2026}"
 INET_PROTOCOLS="${INET_PROTOCOLS:-ipv4}"

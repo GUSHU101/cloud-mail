@@ -29,6 +29,18 @@ describe('self-hosted relay signing', () => {
 		expect(() => endpointFor('http://relay.example.com')).toThrow('must use HTTPS');
 	});
 
+	it('rejects relay URLs containing credentials', () => {
+		expect(() => endpointFor('https://user:password@relay.example.com')).toThrow('must not contain credentials');
+	});
+
+	it('rejects relay secrets that are too short', async () => {
+		await expect(selfHostedMailService.send(
+			{ env: { RELAY_SHARED_SECRET: 'short' } },
+			'https://relay.example.com',
+			{ subject: 'hello' },
+		)).rejects.toThrow('at least 32 characters');
+	});
+
 	it('submits a signed JSON request and returns the relay queue id', async () => {
 		const secret = '0123456789abcdef0123456789abcdef';
 		const payload = { subject: 'hello' };

@@ -474,7 +474,7 @@
               <div class="concerning-item">
                 <span>{{ $t('version') }} :</span>
                 <el-badge is-dot :hidden="!hasUpdate">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail/releases')">
+                  <el-button @click="jump('https://github.com/GUSHU101/longos-cloud-mail/releases')">
                     {{ currentVersion }}
                     <template #icon>
                       <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px" color="#1890FF"/>
@@ -485,7 +485,7 @@
               <div class="concerning-item">
                 <span>{{ $t('community') }} : </span>
                 <div class="community">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail')">
+                  <el-button @click="jump('https://github.com/GUSHU101/longos-cloud-mail')">
                     Github
                     <template #icon>
                       <Icon icon="codicon:github-inverted" width="22" height="22"/>
@@ -995,7 +995,7 @@ defineOptions({
   name: 'sys-setting'
 })
 
-const currentVersion = 'v3.3.0'
+const currentVersion = 'v4.0.0'
 const hasUpdate = ref(false)
 let getUpdateErrorCount = 1;
 const {t, locale} = useI18n();
@@ -1227,8 +1227,8 @@ const resendList = computed(() => {
 
 function getUpdate() {
   if (getUpdateErrorCount > 5 || !getUpdateErrorCount) return
-  axios.get('https://api.github.com/repos/maillab/cloud-mail/releases/latest').then(({data}) => {
-    hasUpdate.value = data.name !== currentVersion
+  axios.get('https://api.github.com/repos/GUSHU101/longos-cloud-mail/releases/latest').then(({data}) => {
+    hasUpdate.value = (data.tag_name || data.name) !== currentVersion
     getUpdateErrorCount = 0
   }).catch(e => {
     getUpdateErrorCount++
