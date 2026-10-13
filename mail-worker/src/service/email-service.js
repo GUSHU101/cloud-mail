@@ -382,6 +382,8 @@ const emailService = {
 		if (!allInternal) {
 			const providerParams = {
 				name,
+				userId,
+				accountId,
 				accountEmail: accountRow.email,
 				receiveEmail,
 				subject,
@@ -569,6 +571,12 @@ const emailService = {
 			html: params.html,
 			headers,
 			attachments: await this.toRelayAttachments(params.attachments),
+			senderContext: {
+				source: 'cloud-mail',
+				tenantId: String(params.userId),
+				accountId: String(params.accountId),
+				category: params.sendType === 'reply' ? 'reply' : 'compose',
+			},
 		});
 	},
 

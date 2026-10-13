@@ -63,6 +63,7 @@ const selfHostedMailService = {
 				method: 'POST',
 				headers: {
 					'content-type': 'application/json',
+					'x-relay-client': 'cloud-mail',
 					'x-relay-timestamp': timestamp,
 					'x-relay-nonce': nonce,
 					'x-relay-signature': signature,

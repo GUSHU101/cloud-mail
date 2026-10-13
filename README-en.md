@@ -91,7 +91,9 @@ With only one domain, you can create multiple different email addresses, similar
 
 When Cloud Mail is paired with LONGOS, LONGOS `./install.sh` builds and starts Postfix/OpenDKIM together with the website. There is no second relay deployment. The Worker submits HMAC-signed requests to `https://your-longos-site/_longos/mail-relay`.
 
-Set `LONGOS_RELAY_URL` and a matching `RELAY_SHARED_SECRET` in this repository's GitHub Actions settings. The deployment workflow installs the Worker secret automatically and Auto mode prefers the LONGOS engine. Standalone Cloud Mail deployments can still use the generic [`mail-relay`](./mail-relay/README.md) procedure.
+Set `LONGOS_RELAY_URL` and save LONGOS's `CLOUD_MAIL_RELAY_SHARED_SECRET` as `RELAY_SHARED_SECRET` in this repository's GitHub Actions settings. The deployment workflow installs the Worker secret automatically and Auto mode prefers the LONGOS engine. LONGOS and Cloud Mail use separate signing keys. Standalone Cloud Mail deployments can still use the generic [`mail-relay`](./mail-relay/README.md) procedure.
+
+The `From` identity always comes from the Cloud Mail account selected by the user. The Worker verifies that the account belongs to that user and that its domain is allowed by the assigned role; the LONGOS relay does not replace it with a platform-wide default address.
 
 Self-hosting still requires a static public IP, configurable PTR/rDNS, and outbound TCP port 25. The shared secret is stored only in LONGOS server configuration, GitHub Secrets, and the Cloudflare Worker secret, never in the browser or D1.
 

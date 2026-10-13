@@ -6,11 +6,16 @@ import nodemailer from 'nodemailer';
 import { verifySignedRequest } from './security.mjs';
 
 const port = toPositiveInt(process.env.PORT, 3000);
-const sharedSecret = process.env.RELAY_SHARED_SECRET || '';
+const legacySharedSecret = process.env.RELAY_SHARED_SECRET || '';
+const clientSecrets = new Map([
+  ['longos', process.env.LONGOS_RELAY_SHARED_SECRET || legacySharedSecret],
+  ['cloud-mail', process.env.CLOUD_MAIL_RELAY_SHARED_SECRET || legacySharedSecret],
+].filter(([, secret]) => secret));
 const maxRequestBytes = toPositiveInt(process.env.MAX_REQUEST_BYTES, 25 * 1024 * 1024);
 const maxAttachmentBytes = toPositiveInt(process.env.MAX_ATTACHMENT_BYTES, 20 * 1024 * 1024);
 const maxRecipients = toPositiveInt(process.env.MAX_RECIPIENTS, 50);
 const maxRequestsPerMinute = toPositiveInt(process.env.MAX_REQUESTS_PER_MINUTE, 120);
+const maxRequestsPerMinuteGlobal = toPositiveInt(process.env.MAX_REQUESTS_PER_MINUTE_GLOBAL, maxRequestsPerMinute * 10);
 const signatureWindowSeconds = toPositiveInt(process.env.SIGNATURE_WINDOW_SECONDS, 300);
 const allowedSenderDomains = new Set(
   (process.env.ALLOWED_SENDER_DOMAINS || '')
@@ -19,8 +24,13 @@ const allowedSenderDomains = new Set(
     .filter(Boolean),
 );
 
-if (sharedSecret.length < 32) {
-  throw new Error('RELAY_SHARED_SECRET must contain at least 32 characters');
+if (clientSecrets.size === 0) {
+  throw new Error('At least one relay client secret must be configured');
+}
+for (const [client, secret] of clientSecrets) {
+  if (secret.length < 32) {
+    throw new Error(`${client} relay secret must contain at least 32 characters`);
+  }
 }
 if (allowedSenderDomains.size === 0) {
   throw new Error('ALLOWED_SENDER_DOMAINS must contain at least one domain');
@@ -35,8 +45,8 @@ const transporter = nodemailer.createTransport({
 const usedNonces = new Map();
 const completedRequests = new Map();
 const inFlightRequests = new Set();
-let currentMinute = Math.floor(Date.now() / 60_000);
-let requestsThisMinute = 0;
+const rateBuckets = new Map();
+let globalRateBucket = { minute: -1, count: 0 };
 
 function toPositiveInt(value, fallback) {
   const parsed = Number(value);
@@ -52,14 +62,18 @@ function json(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-function rateLimitExceeded() {
+function rateLimitExceeded(key) {
   const minute = Math.floor(Date.now() / 60_000);
-  if (minute !== currentMinute) {
-    currentMinute = minute;
-    requestsThisMinute = 0;
+  if (globalRateBucket.minute !== minute) globalRateBucket = { minute, count: 0 };
+  globalRateBucket.count += 1;
+  if (globalRateBucket.count > maxRequestsPerMinuteGlobal) return true;
+  const bucket = rateBuckets.get(key);
+  if (!bucket || bucket.minute !== minute) {
+    rateBuckets.set(key, { minute, count: 1 });
+    return false;
   }
-  requestsThisMinute += 1;
-  return requestsThisMinute > maxRequestsPerMinute;
+  bucket.count += 1;
+  return bucket.count > maxRequestsPerMinute;
 }
 
 async function readBody(request) {
@@ -77,9 +91,9 @@ async function readBody(request) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-function verifySignature(request, rawBody) {
+function verifySignature(request, rawBody, secret) {
   return verifySignedRequest({
-    secret: sharedSecret,
+    secret,
     timestamp: request.headers['x-relay-timestamp'],
     nonce: request.headers['x-relay-nonce'],
     signature: request.headers['x-relay-signature'],
@@ -96,6 +110,10 @@ function cleanupReplayState() {
   }
   for (const [key, item] of completedRequests) {
     if (item.createdAt < oldest) completedRequests.delete(key);
+  }
+  const currentMinute = Math.floor(Date.now() / 60_000);
+  for (const [key, bucket] of rateBuckets) {
+    if (bucket.minute < currentMinute - 1) rateBuckets.delete(key);
   }
 }
 
@@ -120,6 +138,38 @@ function normalizeAddress(value, field) {
   return `${address.slice(0, separator)}@${address.slice(separator + 1).toLowerCase()}`;
 }
 
+function normalizeAddressList(value, field) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    const error = new Error(`Invalid ${field} list`);
+    error.status = 400;
+    throw error;
+  }
+  return [...new Set(value.map(address => normalizeAddress(address, field)))];
+}
+
+function normalizeSenderContext(value) {
+  if (value === undefined) return { source: 'unknown', tenantId: '', tenantCode: '', accountId: '', category: '' };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    const error = new Error('Invalid senderContext');
+    error.status = 400;
+    throw error;
+  }
+  const source = cleanHeader(value.source || 'unknown', 'senderContext.source', 32);
+  if (!['longos', 'cloud-mail', 'unknown'].includes(source)) {
+    const error = new Error('Invalid senderContext.source');
+    error.status = 400;
+    throw error;
+  }
+  return {
+    source,
+    tenantId: cleanHeader(value.tenantId || '', 'senderContext.tenantId', 128),
+    tenantCode: cleanHeader(value.tenantCode || '', 'senderContext.tenantCode', 128),
+    accountId: cleanHeader(value.accountId || '', 'senderContext.accountId', 128),
+    category: cleanHeader(value.category || '', 'senderContext.category', 64),
+  };
+}
+
 function normalizeMessage(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     const error = new Error('JSON object expected');
@@ -141,12 +191,15 @@ function normalizeMessage(body) {
     throw error;
   }
 
-  if (!Array.isArray(body.to) || body.to.length === 0 || body.to.length > maxRecipients) {
+  const to = normalizeAddressList(body.to, 'to recipient');
+  const cc = normalizeAddressList(body.cc, 'cc recipient');
+  const bcc = normalizeAddressList(body.bcc, 'bcc recipient');
+  const allRecipients = [...new Set([...to, ...cc, ...bcc])];
+  if (allRecipients.length === 0 || allRecipients.length > maxRecipients) {
     const error = new Error(`Recipient count must be between 1 and ${maxRecipients}`);
     error.status = 400;
     throw error;
   }
-  const to = [...new Set(body.to.map(value => normalizeAddress(value, 'recipient')))];
 
   const subject = cleanHeader(body.subject, 'subject');
   const fromName = cleanHeader(body.from?.name || '', 'from name', 200);
@@ -198,12 +251,19 @@ function normalizeMessage(body) {
     throw error;
   }
 
+  const senderContext = normalizeSenderContext(body.senderContext);
   return {
     requestId,
+    senderContext,
+    // Context improves auditability, while the rate key remains anchored to
+    // the sender address and cannot be bypassed by rotating a context id.
+    rateKey: `${senderContext.source}:${fromAddress}`,
     mail: {
       from: { address: fromAddress, name: fromName },
-      envelope: { from: fromAddress, to },
+      envelope: { from: fromAddress, to: allRecipients },
       to,
+      cc,
+      bcc,
       subject,
       text: typeof body.text === 'string' ? body.text : undefined,
       html: typeof body.html === 'string' ? body.html : undefined,
@@ -215,12 +275,13 @@ function normalizeMessage(body) {
 }
 
 async function handleSend(request, response) {
-  if (rateLimitExceeded()) {
-    return json(response, 429, { accepted: false, message: 'Rate limit exceeded' });
-  }
-
   const rawBody = await readBody(request);
-  if (!verifySignature(request, rawBody)) {
+  const relayClient = cleanHeader(request.headers['x-relay-client'] || (legacySharedSecret ? 'legacy' : ''), 'relay client', 32);
+  const secret = relayClient === 'legacy' ? legacySharedSecret : clientSecrets.get(relayClient);
+  if (!secret) {
+    return json(response, 401, { accepted: false, message: 'Unknown relay client' });
+  }
+  if (!verifySignature(request, rawBody, secret)) {
     return json(response, 401, { accepted: false, message: 'Invalid or expired signature' });
   }
 
@@ -231,7 +292,10 @@ async function handleSend(request, response) {
     return json(response, 400, { accepted: false, message: 'Invalid JSON' });
   }
 
-  const { requestId, mail } = normalizeMessage(parsed);
+  const { requestId, mail, senderContext, rateKey } = normalizeMessage(parsed);
+  if (relayClient !== 'legacy' && senderContext.source !== relayClient) {
+    return json(response, 403, { accepted: false, message: 'Relay client does not match sender context' });
+  }
   const previous = completedRequests.get(requestId);
   if (previous) {
     return json(response, 202, previous.body);
@@ -239,6 +303,9 @@ async function handleSend(request, response) {
 
   if (inFlightRequests.has(requestId)) {
     return json(response, 409, { accepted: false, message: 'Request is already being processed' });
+  }
+  if (rateLimitExceeded(rateKey)) {
+    return json(response, 429, { accepted: false, message: 'Rate limit exceeded' });
   }
 
   inFlightRequests.add(requestId);
@@ -250,7 +317,16 @@ async function handleSend(request, response) {
       messageId: info.messageId || mail.messageId,
     };
     completedRequests.set(requestId, { createdAt: Date.now(), body: result });
-    console.info(JSON.stringify({ event: 'mail_queued', queueId: requestId, recipients: mail.to.length }));
+    console.info(JSON.stringify({
+      event: 'mail_queued',
+      queueId: requestId,
+      recipients: mail.envelope.to.length,
+      source: senderContext.source,
+      tenantCode: senderContext.tenantCode || undefined,
+      accountId: senderContext.accountId || undefined,
+      category: senderContext.category || undefined,
+      senderDomain: mail.from.address.split('@')[1],
+    }));
     return json(response, 202, result);
   } finally {
     inFlightRequests.delete(requestId);
@@ -281,9 +357,11 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, '0.0.0.0', () => {
-  console.info(JSON.stringify({ event: 'relay_started', port, allowedSenderDomains: [...allowedSenderDomains] }));
-});
+if (process.env.RELAY_NO_LISTEN !== 'true') {
+  server.listen(port, '0.0.0.0', () => {
+    console.info(JSON.stringify({ event: 'relay_started', port, allowedSenderDomains: [...allowedSenderDomains] }));
+  });
+}
 
 function shutdown() {
   server.close(() => process.exit(0));
@@ -292,3 +370,5 @@ function shutdown() {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+export { normalizeMessage, server };

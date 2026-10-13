@@ -98,7 +98,9 @@
 
 如 Cloud Mail 与 LONGOS 配套使用，运行 LONGOS 根目录的 `./install.sh` 时会随网站自动构建并启动 Postfix/OpenDKIM；不需要进入 `mail-relay` 目录，也不需要单独部署第二套服务。Cloudflare Worker 通过 LONGOS 网站的 `https://站点域名/_longos/mail-relay` 提交 HMAC 签名请求。
 
-在本仓库 GitHub Actions 中配置 `LONGOS_RELAY_URL`，并把 LONGOS `.env` 的 `MAIL_RELAY_SHARED_SECRET` 保存为同名的 `RELAY_SHARED_SECRET` 后，工作流会自动写入 Worker，后台“自动”模式会优先使用 LONGOS 内置引擎。独立使用 Cloud Mail、未安装 LONGOS 时，仍可按 [`mail-relay`](./mail-relay/README.md) 的通用方式部署。
+在本仓库 GitHub Actions 中配置 `LONGOS_RELAY_URL`，并把 LONGOS `.env` 的 `CLOUD_MAIL_RELAY_SHARED_SECRET` 保存为同名的 `RELAY_SHARED_SECRET` 后，工作流会自动写入 Worker，后台“自动”模式会优先使用 LONGOS 内置引擎。LONGOS 应用和 Cloud Mail 使用不同的签名密钥。独立使用 Cloud Mail、未安装 LONGOS 时，仍可按 [`mail-relay`](./mail-relay/README.md) 的通用方式部署。
+
+发件时的 `From` 始终来自用户当前选中的 Cloud Mail 账户。Worker 会校验该账户属于当前用户且其域名在角色权限内，不会统一改写成 LONGOS 的默认邮箱。
 
 自建模式仍需要固定公网 IP、可设置 PTR/rDNS，并且服务器允许出站 TCP 25。API 密钥只保存在 LONGOS 服务器环境变量、GitHub Secret 和 Cloudflare Worker Secret 中，不写入网页或 D1。
 

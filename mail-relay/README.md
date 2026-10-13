@@ -83,6 +83,8 @@ https://relay-api.example.com
 
 - API 使用 HMAC-SHA256、时间戳和一次性 nonce 验证请求。
 - 仅允许 `ALLOWED_SENDER_DOMAINS` 中的发件域名。
+- Cloud Mail 在 Worker 内同时校验发件账户归属和角色域名权限；中继只接受选中账户的发件地址。
+- 签名载荷包含用户/账户上下文，日志只记录租户键、账户 ID 和发件域，不记录邮件内容。
 - Postfix 仅监听容器回环地址，不能作为公网 Open Relay。
-- API 有请求体、附件、收件人数和每分钟请求数限制。
+- API 有请求体、附件、To/Cc/Bcc 总人数和单发件身份每分钟请求数限制。
 - 密钥只保存在服务器 `.env` 和 Cloudflare Worker secret 中，不能提交到 Git。

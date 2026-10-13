@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import emailService from '../src/service/email-service';
 import selfHostedMailService, { endpointFor, sign } from '../src/service/self-hosted-mail-service';
 
 afterEach(() => {
@@ -34,6 +35,7 @@ describe('self-hosted relay signing', () => {
 		const fetchMock = vi.fn(async (_url, options) => {
 			const timestamp = options.headers['x-relay-timestamp'];
 			const nonce = options.headers['x-relay-nonce'];
+			expect(options.headers['x-relay-client']).toBe('cloud-mail');
 			const expected = createHmac('sha256', secret)
 				.update(`${timestamp}.${nonce}.${options.body}`)
 				.digest('hex');
@@ -55,5 +57,41 @@ describe('self-hosted relay signing', () => {
 		expect(fetchMock).toHaveBeenCalledOnce();
 		expect(fetchMock.mock.calls[0][0]).toBe('https://relay.example.com/v1/send');
 		expect(result).toEqual({ data: { id: 'queue-123' } });
+	});
+
+	it('binds the selected account and user to the signed relay context', async () => {
+		const secret = '0123456789abcdef0123456789abcdef';
+		const fetchMock = vi.fn(async (_url, options) => {
+			const body = JSON.parse(options.body);
+			expect(body.from.address).toBe('sales@example.com');
+			expect(body.senderContext).toEqual({
+				source: 'cloud-mail',
+				tenantId: 'user-7',
+				accountId: 'account-9',
+				category: 'compose',
+			});
+			return new Response(JSON.stringify({ accepted: true, queueId: 'queue-context' }), { status: 202 });
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await emailService.sendBySelfHosted(
+			{ env: { RELAY_SHARED_SECRET: secret } },
+			'https://relay.example.com',
+			{
+				userId: 'user-7',
+				accountId: 'account-9',
+				accountEmail: 'sales@example.com',
+				name: 'Sales',
+				receiveEmail: ['buyer@example.net'],
+				subject: 'Hello',
+				text: 'Body',
+				html: '',
+				attachments: [],
+				sendType: 'new',
+				messageId: null,
+			},
+		);
+
+		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 });
