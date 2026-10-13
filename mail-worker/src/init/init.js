@@ -32,8 +32,26 @@ const dbInit = {
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
+		await this.v3_4DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_4DB(c) {
+		const statements = [
+			`ALTER TABLE setting ADD COLUMN mail_engine TEXT NOT NULL DEFAULT 'auto';`,
+			`ALTER TABLE setting ADD COLUMN relay_url TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE email ADD COLUMN provider TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE email ADD COLUMN provider_message_id TEXT;`,
+		];
+
+		for (const statement of statements) {
+			try {
+				await c.env.db.prepare(statement).run();
+			} catch (e) {
+				console.warn(`跳过字段：${e.message}`);
+			}
+		}
 	},
 
 	async v3_3DB(c) {

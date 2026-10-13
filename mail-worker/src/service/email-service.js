@@ -23,6 +23,7 @@ import domainUtils from '../utils/domain-uitls';
 import account from "../entity/account";
 import { att } from '../entity/att';
 import telegramService from './telegram-service';
+import selfHostedMailService from './self-hosted-mail-service';
 
 const emailService = {
 
@@ -261,7 +262,7 @@ const emailService = {
 			attachments = [] //附件
 		} = params;
 
-		const { resendTokens, r2Domain, send, domainList } = await settingService.query(c);
+		const { resendTokens, r2Domain, send, domainList, mailEngine = 'auto', relayUrl } = await settingService.query(c);
 
 		let { imageDataList, html } = await attService.toImageUrlHtml(c, content);
 
@@ -329,10 +330,27 @@ const emailService = {
 		const domain = emailUtils.getDomain(accountRow.email);
 		const resendToken = resendTokens[domain];
 		const useCloudflareEmail = !!c.env.email;
+		let selectedProvider = 'internal';
 
-		//如果接收方存在站外邮箱，又没有发信服务
-		if (!useCloudflareEmail && !resendToken && !allInternal) {
-			throw new BizError(t('noSendProvider'));
+		if (!allInternal) {
+			if (mailEngine === 'auto') {
+				selectedProvider = useCloudflareEmail ? 'cloudflare' : (resendToken ? 'resend' : '');
+			} else {
+				selectedProvider = mailEngine;
+			}
+
+			if (selectedProvider === 'cloudflare' && !useCloudflareEmail) {
+				throw new BizError(t('noCloudflareEmailBinding'));
+			}
+			if (selectedProvider === 'resend' && !resendToken) {
+				throw new BizError(t('noResendToken'));
+			}
+			if (selectedProvider === 'self_hosted' && (!relayUrl || !c.env.RELAY_SHARED_SECRET)) {
+				throw new BizError(t('noSelfHostedRelay'));
+			}
+			if (!selectedProvider) {
+				throw new BizError(t('noSendProvider'));
+			}
 		}
 
 		//没有发件人名字自动截取
@@ -357,33 +375,30 @@ const emailService = {
 
 		let sendResult = {};
 
-		//存在站外邮箱时，如果配置了 Cloudflare Email Service 就优先使用，否则使用 Resend
+		//站外收件人通过管理员选择的发信引擎投递。
 		if (!allInternal) {
+			const providerParams = {
+				name,
+				accountEmail: accountRow.email,
+				receiveEmail,
+				subject,
+				text,
+				html,
+				attachments: [...imageDataList, ...attachments],
+				sendType,
+				messageId: emailRow.messageId
+			};
 
-			if (useCloudflareEmail) {
+			if (selectedProvider === 'cloudflare') {
 				sendResult = await this.sendByCloudflareEmail(c, {
-					name,
-					accountEmail: accountRow.email,
-					receiveEmail,
-					subject,
-					text,
-					html,
-					attachments: [...imageDataList, ...attachments],
-					sendType,
-					messageId: emailRow.messageId
+					...providerParams,
 				});
-			} else {
+			} else if (selectedProvider === 'resend') {
 				sendResult = await this.sendByResend(resendToken, {
-					name,
-					accountEmail: accountRow.email,
-					receiveEmail,
-					subject,
-					text,
-					html,
-					attachments: [...imageDataList, ...attachments],
-					sendType,
-					messageId: emailRow.messageId
+					...providerParams,
 				});
+			} else if (selectedProvider === 'self_hosted') {
+				sendResult = await this.sendBySelfHosted(c, relayUrl, providerParams);
 			}
 
 		}
@@ -408,10 +423,12 @@ const emailService = {
 		emailData.content = html;
 		emailData.text = text;
 		emailData.accountId = accountId;
-		emailData.status = useCloudflareEmail ? emailConst.status.DELIVERED : emailConst.status.SENT;
+		emailData.status = ['cloudflare', 'internal'].includes(selectedProvider) ? emailConst.status.DELIVERED : emailConst.status.SENT;
 		emailData.type = emailConst.type.SEND;
 		emailData.userId = userId;
-		emailData.resendEmailId = data?.id;
+		emailData.provider = selectedProvider;
+		emailData.providerMessageId = data?.id;
+		emailData.resendEmailId = selectedProvider === 'resend' ? data?.id : null;
 
 		const recipient = [];
 
@@ -528,6 +545,39 @@ const emailService = {
 		}
 
 		return await resend.emails.send(sendForm);
+	},
+
+	async sendBySelfHosted(c, relayUrl, params) {
+		const headers = {};
+		if (params.sendType === 'reply' && params.messageId) {
+			headers['in-reply-to'] = params.messageId;
+			headers.references = params.messageId;
+		}
+
+		return selfHostedMailService.send(c, relayUrl, {
+			requestId: crypto.randomUUID(),
+			from: {
+				address: params.accountEmail,
+				name: params.name,
+			},
+			to: [...params.receiveEmail],
+			subject: params.subject,
+			text: params.text,
+			html: params.html,
+			headers,
+			attachments: await this.toRelayAttachments(params.attachments),
+		});
+	},
+
+	async toRelayAttachments(attachments = []) {
+		const normalized = await this.toResendAttachments(attachments);
+		return normalized.map(attachment => ({
+			filename: attachment.filename,
+			content: attachment.content,
+			contentType: attachment.contentType,
+			contentId: attachment.contentId?.replace(/^<|>$/g, ''),
+			disposition: attachment.contentId ? 'inline' : 'attachment',
+		}));
 	},
 
 	async toCloudflareAttachments(attachments) {

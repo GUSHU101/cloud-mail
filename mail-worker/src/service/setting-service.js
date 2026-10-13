@@ -89,6 +89,7 @@ const settingService = {
 		settingRow.tgBotToken = settingRow.tgBotToken ? `${settingRow.tgBotToken.slice(0, 20)}******` : null;
 		settingRow.hasR2 = !!c.env.r2
 		settingRow.hasCfEmail = !!c.env.email
+		settingRow.hasRelaySecret = !!c.env.RELAY_SHARED_SECRET
 
 		let regVerifyOpen = false
 		let addVerifyOpen = false
@@ -112,6 +113,24 @@ const settingService = {
 
 	async set(c, params) {
 		const settingData = await this.query(c);
+		const allowedMailEngines = ['auto', 'cloudflare', 'resend', 'self_hosted'];
+		if (params.mailEngine !== undefined && !allowedMailEngines.includes(params.mailEngine)) {
+			throw new BizError('Invalid mail engine');
+		}
+		if (params.relayUrl !== undefined) {
+			params.relayUrl = String(params.relayUrl || '').trim().replace(/\/$/, '');
+			if (params.relayUrl) {
+				let relayUrl;
+				try {
+					relayUrl = new URL(params.relayUrl);
+				} catch {
+					throw new BizError('Invalid self-hosted relay URL');
+				}
+				if (relayUrl.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(relayUrl.hostname)) {
+					throw new BizError('Self-hosted relay URL must use HTTPS');
+				}
+			}
+		}
 		let resendTokens = { ...settingData.resendTokens, ...params.resendTokens };
 		Object.keys(resendTokens).forEach(domain => {
 			if (!resendTokens[domain]) delete resendTokens[domain];

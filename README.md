@@ -52,7 +52,7 @@
 
 - **💻 响应式设计**：响应式布局自动适配PC和大部分手机端浏览器
 
-- **📧 邮件发送**：集成Resend发送邮件，支持群发，内嵌图片和附件发送，发送状态查看
+- **📧 邮件发送**：支持 Cloudflare、Resend 和完全自建的 Postfix 邮件引擎，支持群发、内嵌图片和附件
 
 - **🛡️ 管理员功能**：可以对用户，邮件进行管理，RABC权限控制对功能及使用资源限制
 
@@ -86,7 +86,7 @@
 
 - **UI框架**：[Element Plus](https://element-plus.org/) 
 
-- **邮件推送：** [Resend](https://resend.com/)
+- **邮件发送：** Cloudflare Email、[Resend](https://resend.com/) 或仓库内置的自建 Postfix 中继
 
 - **缓存**：[Cloudflare KV](https://developers.cloudflare.com/kv/)
 
@@ -94,10 +94,17 @@
 
 - **文件存储**：[Cloudflare R2](https://developers.cloudflare.com/r2/)
 
+## 完全自建发信
+
+如不希望依赖付费邮件平台，可在自己的服务器部署仓库内的 [`mail-relay`](./mail-relay/README.md)。Cloudflare Worker 通过带 HMAC 签名的 HTTPS 请求提交邮件，服务器使用 Postfix 和 OpenDKIM 直接投递到收件方 MX。
+
+自建模式需要固定公网 IP、可设置 PTR/rDNS，并且服务器允许出站 TCP 25。API 密钥只保存在服务器环境变量和 Cloudflare Worker secret 中，不写入网页或 D1。
+
 ## 目录结构
 
 ```
 cloud-mail
+├── mail-relay                 # 自建 HTTPS Relay + Postfix + OpenDKIM
 ├── mail-worker				    # worker后端项目
 │   ├── src                  
 │   │   ├── api	 			    # api接口层			

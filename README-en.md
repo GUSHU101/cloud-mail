@@ -47,7 +47,7 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **💻 Responsive Design**: Automatically adapts to both desktop and most mobile browsers.
 
-- **📧 Email Sending**: Integrated with Resend, supporting bulk email sending and attachments.
+- **📧 Email Sending**: Cloudflare, Resend, and fully self-hosted Postfix engines with bulk, inline-image, and attachment support.
 
 - **🛡️ Admin Features**: Admin controls for user and email management with RBAC-based access control.
 
@@ -79,7 +79,7 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **UI Framework**: [Element Plus](https://element-plus.org/)
 
-- **Email Service**: [Resend](https://resend.com/)
+- **Email Service**: Cloudflare Email, [Resend](https://resend.com/), or the bundled self-hosted Postfix relay
 
 - **Cache**: [Cloudflare KV](https://developers.cloudflare.com/kv/)
 
@@ -87,10 +87,17 @@ With only one domain, you can create multiple different email addresses, similar
 
 - **File Storage**: [Cloudflare R2](https://developers.cloudflare.com/r2/)
 
+## Fully self-hosted sending
+
+To avoid paid email delivery providers, deploy the repository's [`mail-relay`](./mail-relay/README.md) on your own server. The Cloudflare Worker submits HMAC-signed HTTPS requests, and Postfix with OpenDKIM delivers directly to recipient MX servers.
+
+Self-hosting requires a static public IP, configurable PTR/rDNS, and outbound TCP port 25. The shared secret is stored only in server environment variables and a Cloudflare Worker secret, never in the browser or D1.
+
 ## Project Structure
 
 ```
 cloud-mail
+├── mail-relay                 # Self-hosted HTTPS relay + Postfix + OpenDKIM
 ├── mail-worker				    # Backend worker project
 │   ├── src                  
 │   │   ├── api	 			    # API layer

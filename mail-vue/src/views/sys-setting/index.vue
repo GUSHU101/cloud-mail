@@ -189,11 +189,38 @@
                 </div>
               </div>
               <div class="setting-item">
-                <div><span>{{ setting.hasCfEmail ? $t('cloudflareEmailSending') : $t('resendToken') }}</span></div>
-                <div v-if="setting.hasCfEmail">
-                  <span>{{ $t('enabled') }}</span>
+                <div><span>{{ $t('mailEngine') }}</span></div>
+                <div>
+                  <el-select
+                      style="width: 180px"
+                      v-model="setting.mailEngine"
+                      :disabled="settingLoading"
+                      @change="value => changeField('mailEngine', value)"
+                  >
+                    <el-option
+                        v-for="item in mailEngineOptions"
+                        :key="item.value"
+                        :label="item.label"
+                        :value="item.value"
+                    />
+                  </el-select>
                 </div>
-                <div v-else>
+              </div>
+              <div class="setting-item" v-if="setting.mailEngine === 'self_hosted'">
+                <div><span>{{ $t('selfHostedRelay') }}</span></div>
+                <div>
+                  <el-tag :type="setting.relayUrl && setting.hasRelaySecret ? 'success' : 'danger'">
+                    {{ setting.relayUrl && setting.hasRelaySecret ? $t('configured') : $t('notConfigured') }}
+                  </el-tag>
+                  <el-button class="opt-button" style="margin: 0 0 0 8px" @click="openSelfHostedRelay" size="small"
+                             type="primary">
+                    <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item" v-if="setting.mailEngine === 'auto' || setting.mailEngine === 'resend'">
+                <div><span>{{ $t('resendToken') }}</span></div>
+                <div>
                   <el-button class="opt-button" style="margin-top: 0" @click="openResendList" size="small"
                              type="primary">
                     <Icon icon="ic:round-list" width="18" height="18"/>
@@ -514,6 +541,21 @@
           </el-select>
           <el-input type="text" :placeholder="$t('addResendTokenDesc')" v-model="resendTokenForm.token" @keyup.enter="saveResendToken"/>
           <el-button type="primary" :loading="settingLoading" @click="saveResendToken">{{ $t('save') }}</el-button>
+        </form>
+      </el-dialog>
+      <el-dialog v-model="selfHostedRelayShow" :title="$t('selfHostedRelay')" width="420"
+                 @closed="relayUrlInput = setting.relayUrl || ''">
+        <form @submit.prevent>
+          <el-input type="url" placeholder="https://relay-api.example.com" v-model="relayUrlInput"
+                    @keyup.enter="saveSelfHostedRelay"/>
+          <el-alert
+              style="margin-top: 15px"
+              :title="$t('relaySecretDesc')"
+              :type="setting.hasRelaySecret ? 'success' : 'warning'"
+              :closable="false"
+              show-icon
+          />
+          <el-button type="primary" :loading="settingLoading" @click="saveSelfHostedRelay">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog v-model="r2DomainShow" :title="$t('addOsDomain')" width="340"
@@ -965,6 +1007,7 @@ const accountStore = useAccountStore();
 const userStore = useUserStore();
 const editTitleShow = ref(false)
 const resendTokenFormShow = ref(false)
+const selfHostedRelayShow = ref(false)
 const blackFormShow = ref(false)
 const autoCleanShow = ref(false)
 const aiCodeFilterShow = ref(false)
@@ -984,6 +1027,7 @@ const editTitle = ref('')
 const settingLoading = ref(false)
 const clearS3Loading = ref(false)
 const r2DomainInput = ref('')
+const relayUrlInput = ref('')
 const loginOpacity = ref(0)
 const minEmailPrefix = ref(0)
 const emailPrefixFilter = ref([])
@@ -1098,6 +1142,12 @@ const tgMsgFromOption = [{label: t('show'), value: 'show'}, {label: t('hide'), v
 const tgMsgToOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
 const tgMsgTextOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
 const tgMsgLabelWidth = computed(() => locale.value === 'en' ? '120px' : '100px');
+const mailEngineOptions = computed(() => [
+  {label: t('mailEngineAuto'), value: 'auto'},
+  {label: t('cloudflareEmailSending'), value: 'cloudflare'},
+  {label: 'Resend', value: 'resend'},
+  {label: t('selfHostedRelay'), value: 'self_hosted'},
+])
 
 getSettings()
 getUpdate()
@@ -1106,6 +1156,7 @@ function getSettings() {
   settingReady.value = false
   settingQuery().then(settingData => {
     setting.value = settingData
+    setting.value.mailEngine = setting.value.mailEngine || 'auto'
     settingStore.domainList = settingData.domainList;
     resendTokenForm.domain = setting.value.domainList[0]
     loginOpacity.value = setting.value.loginOpacity
@@ -1114,6 +1165,7 @@ function getSettings() {
     backgroundUrl.value = setting.value.background?.startsWith('http') ? setting.value.background : ''
     editTitle.value = setting.value.title
     r2DomainInput.value = setting.value.r2Domain
+    relayUrlInput.value = setting.value.relayUrl || ''
     addVerifyCount.value = setting.value.addVerifyCount
     regVerifyCount.value = setting.value.regVerifyCount
     resetNoticeForm()
@@ -1648,6 +1700,15 @@ function openResendForm() {
   resendTokenFormShow.value = true
 }
 
+function openSelfHostedRelay() {
+  relayUrlInput.value = setting.value.relayUrl || ''
+  selfHostedRelayShow.value = true
+}
+
+function saveSelfHostedRelay() {
+  editSetting({relayUrl: relayUrlInput.value.trim()})
+}
+
 function openBlackListForm() {
   blackFormShow.value = true
 }
@@ -1732,6 +1793,7 @@ function editSetting(settingForm, refreshStatus = true) {
     editTitleShow.value = false
     r2DomainShow.value = false
     resendTokenFormShow.value = false
+    selfHostedRelayShow.value = false
     turnstileShow.value = false
     tgSettingShow.value = false
     thirdEmailShow.value = false
