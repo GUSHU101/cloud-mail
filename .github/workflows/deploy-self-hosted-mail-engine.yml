@@ -1,0 +1,15 @@
+name: 🚀 Deploy self-hosted mail engine
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy feature/self-hosted-mail-engine
+    uses: GUSHU101/cloud-mail/.github/workflows/deploy-cloudflare.yml@feature/self-hosted-mail-engine
+    with:
+      checkout_ref: feature/self-hosted-mail-engine
+    secrets: inherit
