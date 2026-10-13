@@ -1,0 +1,67 @@
+name: Self-hosted mail engine CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/self-hosted-mail-engine
+    paths:
+      - "mail-relay/**"
+      - "mail-worker/**"
+      - "mail-vue/**"
+      - ".github/workflows/self-hosted-mail-engine-ci.yml"
+  pull_request:
+    paths:
+      - "mail-relay/**"
+      - "mail-worker/**"
+      - "mail-vue/**"
+      - ".github/workflows/self-hosted-mail-engine-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            mail-worker/pnpm-lock.yaml
+            mail-vue/pnpm-lock.yaml
+      - name: Install Worker dependencies
+        working-directory: mail-worker
+        run: pnpm install --frozen-lockfile
+      - name: Install frontend dependencies
+        working-directory: mail-vue
+        run: pnpm install --frozen-lockfile
+      - name: Test relay signing
+        working-directory: mail-worker
+        run: pnpm run test:unit
+      - name: Build frontend
+        working-directory: mail-vue
+        run: pnpm run build
+      - name: Bundle Worker
+        working-directory: mail-worker
+        run: pnpm exec wrangler deploy --dry-run --outdir /tmp/cloud-mail-worker
+
+  relay-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mail-relay/package-lock.json
+      - name: Test relay security
+        working-directory: mail-relay
+        run: npm ci && npm test
+      - name: Build relay image
+        run: docker build --tag cloud-mail-relay:ci ./mail-relay

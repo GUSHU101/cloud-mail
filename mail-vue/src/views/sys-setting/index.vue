@@ -6,7 +6,7 @@
     <el-scrollbar class="scroll" v-if="!firstLoading">
       <div class="scroll-body">
         <div class="card-grid">
-          <!-- Website Settings Card -->
+          <!-- Basic Settings Card -->
           <div class="settings-card">
             <div class="card-title">{{ $t('websiteSetting') }}</div>
             <div class="card-content">
@@ -63,6 +63,18 @@
               </div>
               <div class="setting-item">
                 <div>
+                  <span>{{ $t('syncDelete') }}</span>
+                  <el-tooltip effect="dark" :content="$t('syncDeleteDesc')">
+                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+                  </el-tooltip>
+                </div>
+                <div>
+                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
+                             v-model="setting.syncDelete"/>
+                </div>
+              </div>
+              <div class="setting-item">
+                <div>
                   <span>{{ $t('emailPrefix') }}</span>
                 </div>
                 <div class="forward">
@@ -91,13 +103,6 @@
                 <div class="title-item"><span>{{ $t('loginBoxOpacity') }}</span></div>
                 <div>
                   <el-input-number size="small" v-model="loginOpacity" @change="opacityChange" :precision="2"
-                                   :step="0.01" :max="1" :min="0"/>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div class="title-item"><span>{{ $t('backgroundDarken') }}</span></div>
-                <div>
-                  <el-input-number size="small" v-model="loginDarkenFactor" @change="darkenChange" :precision="2"
                                    :step="0.01" :max="1" :min="0"/>
                 </div>
               </div>
@@ -184,11 +189,38 @@
                 </div>
               </div>
               <div class="setting-item">
-                <div><span>{{ setting.hasCfEmail ? $t('cloudflareEmailSending') : $t('resendToken') }}</span></div>
-                <div v-if="setting.hasCfEmail">
-                  <span>{{ $t('enabled') }}</span>
+                <div><span>{{ $t('mailEngine') }}</span></div>
+                <div>
+                  <el-select
+                      style="width: 180px"
+                      v-model="setting.mailEngine"
+                      :disabled="settingLoading"
+                      @change="value => changeField('mailEngine', value)"
+                  >
+                    <el-option
+                        v-for="item in mailEngineOptions"
+                        :key="item.value"
+                        :label="item.label"
+                        :value="item.value"
+                    />
+                  </el-select>
                 </div>
-                <div v-else>
+              </div>
+              <div class="setting-item" v-if="setting.mailEngine === 'self_hosted'">
+                <div><span>{{ $t('selfHostedRelay') }}</span></div>
+                <div>
+                  <el-tag :type="setting.relayUrl && setting.hasRelaySecret ? 'success' : 'danger'">
+                    {{ setting.relayUrl && setting.hasRelaySecret ? $t('configured') : $t('notConfigured') }}
+                  </el-tag>
+                  <el-button class="opt-button" style="margin: 0 0 0 8px" @click="openSelfHostedRelay" size="small"
+                             type="primary">
+                    <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item" v-if="setting.mailEngine === 'auto' || setting.mailEngine === 'resend'">
+                <div><span>{{ $t('resendToken') }}</span></div>
+                <div>
                   <el-button class="opt-button" style="margin-top: 0" @click="openResendList" size="small"
                              type="primary">
                     <Icon icon="ic:round-list" width="18" height="18"/>
@@ -205,6 +237,63 @@
                   <el-button class="opt-button" style="margin-top: 0" @click="openBlackListForm" size="small"
                              type="primary">
                     <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item">
+                <div>
+                  <span>{{ $t('autoClean') }}</span>
+                  <el-tooltip effect="dark" :content="$t('autoCleanDesc')">
+                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+                  </el-tooltip>
+                </div>
+                <div class="forward">
+                  <span>{{ setting.autoCleanDays > 0 ? $t('autoCleanRetain', { days: setting.autoCleanDays }) : $t('disabled') }}</span>
+                  <el-button class="opt-button" style="margin-top: 0" @click="openAutoClean" size="small"
+                             type="primary">
+                    <Icon icon="fluent:settings-48-regular" width="16" height="16"/>
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="card-title">{{ $t('emailPush') }}</div>
+            <div class="card-content">
+              <div class="setting-item">
+                <div><span>{{ $t('tgBot') }}</span></div>
+                <div class="forward">
+                  <span>{{ setting.tgBotStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
+                  <el-button class="opt-button" size="small" type="primary" @click="openTgSetting">
+                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item">
+                <div><span>{{ $t('otherEmail') }}</span></div>
+                <div class="forward">
+                  <span>{{ setting.forwardStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
+                  <el-button class="opt-button" size="small" type="primary" @click="openThirdEmailSetting">
+                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item">
+                <div><span>{{ $t('webhook') }}</span></div>
+                <div class="forward">
+                  <span>{{ setting.webhookStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
+                  <el-button class="opt-button" size="small" type="primary" @click="openWebhookSetting">
+                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item">
+                <div><span>{{ $t('forwardingRules') }}</span></div>
+                <div class="forward">
+                  <span>{{ setting.ruleType === 0 ? $t('forwardAll') : $t('rules') }}</span>
+                  <el-button class="opt-button" size="small" type="primary" @click="openForwardRules">
+                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
                   </el-button>
                 </div>
               </div>
@@ -247,39 +336,6 @@
                   <div class="storage-type">
                     <el-tag>{{ setting.storageType }}</el-tag>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="card-title">{{ $t('emailPush') }}</div>
-            <div class="card-content">
-              <div class="setting-item">
-                <div><span>{{ $t('tgBot') }}</span></div>
-                <div class="forward">
-                  <span>{{ setting.tgBotStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openTgSetting">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('otherEmail') }}</span></div>
-                <div class="forward">
-                  <span>{{ setting.forwardStatus === 0 ? $t('enabled') : $t('disabled') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openThirdEmailSetting">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
-                </div>
-              </div>
-              <div class="setting-item">
-                <div><span>{{ $t('forwardingRules') }}</span></div>
-                <div class="forward">
-                  <span>{{ setting.ruleType === 0 ? $t('forwardAll') : $t('rules') }}</span>
-                  <el-button class="opt-button" size="small" type="primary" @click="openForwardRules">
-                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
-                  </el-button>
                 </div>
               </div>
             </div>
@@ -392,13 +448,33 @@
             </div>
           </div>
 
+          <!-- OAuth Login Card -->
+          <div class="settings-card">
+            <div class="card-title">{{ $t('oauthLogin') }}</div>
+            <div class="card-content">
+              <div class="setting-item" v-for="p in oauthPlatforms" :key="p.key">
+                <div>
+                  <el-avatar v-if="p.iconType === 'image'" :src="p.icon" :size="22" class="oauth-icon"/>
+                  <Icon v-else :icon="p.icon" width="22" height="22" class="oauth-icon"/>
+                  <span>{{ p.label }}</span>
+                </div>
+                <div class="forward">
+                  <span>{{ setting[p.key + 'Switch'] === 0 ? $t('enabled') : $t('disabled') }}</span>
+                  <el-button class="opt-button" size="small" type="primary" @click="openOauthSetting(p)">
+                    <Icon icon="fluent:settings-48-regular" width="18" height="18"/>
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="settings-card about">
             <div class="card-title">{{ $t('about') }}</div>
             <div class="card-content">
               <div class="concerning-item">
                 <span>{{ $t('version') }} :</span>
                 <el-badge is-dot :hidden="!hasUpdate">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail/releases')">
+                  <el-button @click="jump('https://github.com/GUSHU101/longos-cloud-mail/releases')">
                     {{ currentVersion }}
                     <template #icon>
                       <Icon icon="qlementine-icons:version-control-16" style="font-size: 20px" color="#1890FF"/>
@@ -409,7 +485,7 @@
               <div class="concerning-item">
                 <span>{{ $t('community') }} : </span>
                 <div class="community">
-                  <el-button @click="jump('https://github.com/maillab/cloud-mail')">
+                  <el-button @click="jump('https://github.com/GUSHU101/longos-cloud-mail')">
                     Github
                     <template #icon>
                       <Icon icon="codicon:github-inverted" width="22" height="22"/>
@@ -448,13 +524,13 @@
 
       <!-- Dialogs remain the same -->
       <el-dialog v-model="editTitleShow" :title="$t('changeTitle')" width="340" @closed="editTitle = setting.title">
-        <form>
-          <el-input type="text" :placeholder="$t('websiteTitle')" v-model="editTitle"/>
+        <form @submit.prevent>
+          <el-input type="text" :placeholder="$t('websiteTitle')" v-model="editTitle" @keyup.enter="saveTitle"/>
           <el-button type="primary" :loading="settingLoading" @click="saveTitle">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog v-model="resendTokenFormShow" :title="$t('resendToken')" width="340" @closed="cleanResendTokenForm">
-        <form>
+        <form @submit.prevent>
           <el-select style="margin-bottom: 15px" v-model="resendTokenForm.domain" placeholder="Select">
             <el-option
                 v-for="item in settingStore.domainList"
@@ -463,24 +539,53 @@
                 :value="item"
             />
           </el-select>
-          <el-input type="text" :placeholder="$t('addResendTokenDesc')" v-model="resendTokenForm.token"/>
+          <el-input type="text" :placeholder="$t('addResendTokenDesc')" v-model="resendTokenForm.token" @keyup.enter="saveResendToken"/>
           <el-button type="primary" :loading="settingLoading" @click="saveResendToken">{{ $t('save') }}</el-button>
+        </form>
+      </el-dialog>
+      <el-dialog v-model="selfHostedRelayShow" :title="$t('selfHostedRelay')" width="420"
+                 @closed="relayUrlInput = setting.relayUrl || ''">
+        <form @submit.prevent>
+          <el-input type="url" placeholder="https://shop.example.com/_longos/mail-relay" v-model="relayUrlInput"
+                    @keyup.enter="saveSelfHostedRelay"/>
+          <el-alert
+              style="margin-top: 15px"
+              :title="$t('relaySecretDesc')"
+              :type="setting.hasRelaySecret ? 'success' : 'warning'"
+              :closable="false"
+              show-icon
+          />
+          <el-button type="primary" :loading="settingLoading" @click="saveSelfHostedRelay">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog v-model="r2DomainShow" :title="$t('addOsDomain')" width="340"
                  @closed="r2DomainInput = setting.r2Domain">
-        <form>
-          <el-input type="text" :placeholder="$t('domainDesc')" v-model="r2DomainInput"/>
+        <form @submit.prevent>
+          <el-input type="text" :placeholder="$t('domainDesc')" v-model="r2DomainInput" @keyup.enter="saveR2domain"/>
           <el-button type="primary" :loading="settingLoading" @click="saveR2domain">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog v-model="turnstileShow" :title="$t('addTurnstileSecret')" width="340"
                  @closed="turnstileForm.secretKey = '';turnstileForm.siteKey = ''">
-        <form>
-          <el-input type="text" placeholder="Site Key" v-model="turnstileForm.siteKey"/>
-          <el-input type="text" style="margin-top: 15px" placeholder="Secret Key" v-model="turnstileForm.secretKey"/>
+        <form @submit.prevent>
+          <el-input type="text" placeholder="Site Key" v-model="turnstileForm.siteKey" @keyup.enter="saveTurnstileKey"/>
+          <el-input type="text" style="margin-top: 15px" placeholder="Secret Key" v-model="turnstileForm.secretKey" @keyup.enter="saveTurnstileKey"/>
           <el-button type="primary" :loading="settingLoading" @click="saveTurnstileKey">{{ $t('save') }}</el-button>
         </form>
+      </el-dialog>
+      <el-dialog v-model="oauthSettingShow" :title="$t('oauthSetting') + ' - ' + oauthForm.label" width="340"
+                 @closed="oauthForm.clientId = ''; oauthForm.clientSecret = ''; oauthForm.switch = 1">
+        <div class="dialog-content">
+          <el-input type="text" :placeholder="$t('clientId')" v-model="oauthForm.clientId"/>
+          <el-input type="text" style="margin-top: 15px" :placeholder="$t('clientSecret')" v-model="oauthForm.clientSecret"/>
+        </div>
+        <template #footer>
+          <div class="dialog-footer">
+            <el-switch v-model="oauthForm.switch" :active-value="0" :inactive-value="1" :active-text="$t('enable')"
+                       :inactive-text="$t('disable')"/>
+            <el-button type="primary" :loading="settingLoading" @click="saveOauth">{{ $t('save') }}</el-button>
+          </div>
+        </template>
       </el-dialog>
       <el-dialog
           v-model="showSetBackground"
@@ -499,7 +604,7 @@
           </span>
         </template>
         <el-input :placeholder="$t('backgroundUrlDesc')" v-model="backgroundUrl" v-if="!localUpShow"
-                  class="background-url"/>
+                  class="background-url" @keyup.enter="saveBackground"/>
         <el-image
             v-if="localUpShow"
             :preview-src-list="[backgroundImage]"
@@ -531,10 +636,10 @@
           </div>
         </template>
         <div class="forward-set-body">
-          <el-input :placeholder="setting.tgBotToken || $t('tgBotToken')" v-model="tgBotToken"></el-input>
+          <el-input :placeholder="setting.tgBotToken || $t('tgBotToken')" v-model="tgBotToken" @keyup.enter="tgBotSave"></el-input>
           <el-input-tag tag-type="warning" :placeholder="$t('toBotTokenDesc')" v-model="tgChatId"
                         @add-tag="addChatTag"></el-input-tag>
-          <el-input tag-type="warning" :placeholder="$t('customDomainDesc')" v-model="customDomain" ></el-input>
+          <el-input tag-type="warning" :placeholder="$t('customDomainDesc')" v-model="customDomain" @keyup.enter="tgBotSave"></el-input>
           <div class="tg-msg-label">
             <span>{{t('from')}}</span>
             <el-select  v-model="tgMsgFrom" >
@@ -606,6 +711,48 @@
         </template>
       </el-dialog>
       <el-dialog
+          v-model="webhookShow"
+          class="forward-dialog"
+          @closed="webhookFormatShow = false"
+      >
+        <template #header>
+          <div class="forward-head">
+            <span class="forward-set-title">{{ $t('webhook') }}</span>
+            <el-tooltip effect="dark" :content="$t('webhookDesc')">
+              <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+            </el-tooltip>
+          </div>
+        </template>
+        <div class="forward-set-body">
+          <el-input :placeholder="$t('webhookUrl')" v-model="webhookUrl" @keyup.enter="webhookSave"></el-input>
+          <el-input :placeholder="$t('webhookSecret')" v-model="webhookSecret" @keyup.enter="webhookSave"></el-input>
+          <div class="tg-msg-label">
+            <span>{{ t('webhookRetry') }}</span>
+            <el-input-number v-model="webhookRetry" :min="0" :max="5" controls-position="right"/>
+          </div>
+          <div v-show="webhookFormatShow" class="webhook-format">
+            <pre>Content-Type: application/json
+Authorization: &lt;secret&gt;</pre>
+            <pre>{{ webhookPayloadExample }}</pre>
+          </div>
+        </div>
+        <template #footer>
+          <div class="dialog-footer">
+            <el-switch v-model="webhookStatus" :active-value="0" :inactive-value="1" :active-text="$t('enable')"
+                       :inactive-text="$t('disable')"/>
+            <div class="webhook-footer-right">
+              <div class="webhook-format-title" @click="webhookFormatShow = !webhookFormatShow">
+                <span>{{ $t('webhookFormat') }}</span>
+                <Icon class="webhook-format-icon" :class="{ open: webhookFormatShow }" icon="mingcute:down-small-fill" width="18" height="18"/>
+              </div>
+              <el-button :loading="settingLoading" type="primary" @click="webhookSave">
+                {{ $t('save') }}
+              </el-button>
+            </div>
+          </div>
+        </template>
+      </el-dialog>
+      <el-dialog
           v-model="forwardRulesShow"
           class="forward-dialog"
       >
@@ -643,23 +790,23 @@
       </el-dialog>
       <el-dialog v-model="regVerifyCountShow" :title="$t('rulesVerifyTitle',{count: regVerifyCount})"
                  @closed="regVerifyCount = setting.regVerifyCount">
-        <form>
-          <el-input-number type="text" v-model="regVerifyCount" :min="1">
+        <form @submit.prevent>
+          <el-input-number type="text" v-model="regVerifyCount" :min="1" @keyup.enter="saveRegVerifyCount">
           </el-input-number>
           <el-button type="primary" :loading="settingLoading" @click="saveRegVerifyCount">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog v-model="addVerifyCountShow" :title="$t('rulesVerifyTitle',{count: addVerifyCount})"
                  @closed="addVerifyCount = setting.addVerifyCount">
-        <form>
-          <el-input-number type="text" v-model="addVerifyCount" :min="1"/>
+        <form @submit.prevent>
+          <el-input-number type="text" v-model="addVerifyCount" :min="1" @keyup.enter="saveAddVerifyCount"/>
           <el-button type="primary" :loading="settingLoading" @click="saveAddVerifyCount">{{ $t('save') }}</el-button>
         </form>
       </el-dialog>
       <el-dialog top="5vh" v-model="noticePopupShow" :title="$t('noticePopup')" class="notice-popup"
                  @closed="resetNoticeForm">
-        <form>
-          <el-input v-model="noticeForm.noticeTitle" :placeholder="t('titleDesc')"/>
+        <form @submit.prevent>
+          <el-input v-model="noticeForm.noticeTitle" :placeholder="t('titleDesc')" @keyup.enter="saveNoticePopup"/>
           <div class="notice-line-item">
             <el-select v-model="noticeForm.noticeType">
               <template #prefix>
@@ -730,13 +877,13 @@
         </template>
       </el-dialog>
       <el-dialog v-model="addS3Show" :title="t('s3Configuration')" width="340" @closed="resetAddS3Form">
-        <form>
-          <el-input class="dialog-input" type="text" placeholder="Bucket" v-model="s3.bucket"/>
-          <el-input class="dialog-input" type="text" placeholder="Endpoint" v-model="s3.endpoint"/>
-          <el-input class="dialog-input" type="text" placeholder="Region" v-model="s3.region"/>
+        <form @submit.prevent>
+          <el-input class="dialog-input" type="text" placeholder="Bucket" v-model="s3.bucket" @keyup.enter="saveS3"/>
+          <el-input class="dialog-input" type="text" placeholder="Endpoint" v-model="s3.endpoint" @keyup.enter="saveS3"/>
+          <el-input class="dialog-input" type="text" placeholder="Region" v-model="s3.region" @keyup.enter="saveS3"/>
           <el-input class="dialog-input" type="text" :placeholder="setting.s3AccessKey || 'Access Key'"
-                    v-model="s3.s3AccessKey"/>
-          <el-input style="margin-bottom: 10px" type="text" :placeholder="setting.s3SecretKey || 'Secret Key'" v-model="s3.s3SecretKey"/>
+                    v-model="s3.s3AccessKey" @keyup.enter="saveS3"/>
+          <el-input style="margin-bottom: 10px" type="text" :placeholder="setting.s3SecretKey || 'Secret Key'" v-model="s3.s3SecretKey" @keyup.enter="saveS3"/>
           <div class="force-path-style">
             <div class="force-path-style-left">
               <span>ForcePathStyle</span>
@@ -756,7 +903,7 @@
       <el-dialog v-model="emailPrefixShow" :title="t('emailPrefix')"  @closed="resetEmailPrefix"  >
         <div class="email-prefix">
           <div>{{ t('atLeast') }}</div>
-          <el-input-number v-model="minEmailPrefix" :min="1" :max="20" style="width: 150px" >
+          <el-input-number v-model="minEmailPrefix" :min="1" :max="20" style="width: 150px" @keyup.enter="saveEmailPrefix" >
             <template #suffix>
               <span>{{ t('character') }}</span>
             </template>
@@ -790,6 +937,22 @@
         </el-form>
         <el-button type="primary" style="width: 100%;" :loading="settingLoading" @click="saveBlackList">{{ $t('save') }}</el-button>
       </el-dialog>
+      <el-dialog v-model="autoCleanShow" :title="t('autoClean')" class="forward-dialog" @closed="resetAutoClean">
+        <el-form>
+          <el-form-item :label="t('autoCleanDays')" label-position="top">
+            <el-input-number v-model="autoCleanDays" :min="0" :max="3650" style="width: 100%"/>
+          </el-form-item>
+          <el-form-item :label="t('autoCleanExclude')" label-position="top">
+            <el-input-tag
+                tag-type="warning"
+                :placeholder="$t('autoCleanExcludeDesc')"
+                v-model="autoCleanExclude"
+                @add-tag="autoCleanExcludeAddTag"
+            />
+          </el-form-item>
+        </el-form>
+        <el-button type="primary" style="width: 100%;" :loading="settingLoading" @click="saveAutoClean">{{ $t('save') }}</el-button>
+      </el-dialog>
       <el-dialog v-model="aiCodeFilterShow" class="forward-dialog" @closed="resetAiCodeFilter">
         <template #header>
           <div class="forward-head">
@@ -818,10 +981,10 @@ import {useUiStore} from "@/store/ui.js";
 import {useUserStore} from "@/store/user.js";
 import {useAccountStore} from "@/store/account.js";
 import {Icon} from "@iconify/vue";
-import {cvtR2Url} from "@/utils/convert.js";
+import {cvtR2Url, toOssDomain} from "@/utils/convert.js";
 import {storeToRefs} from "pinia";
 import {debounce} from 'lodash-es'
-import {isDomain, isEmail} from "@/utils/verify-utils.js";
+import {isDomain, isEmail, isIpUrl} from "@/utils/verify-utils.js";
 import loading from "@/components/loading/index.vue";
 import {getTextWidth} from "@/utils/text.js";
 import {fileToBase64} from "@/utils/file-utils.js"
@@ -832,7 +995,7 @@ defineOptions({
   name: 'sys-setting'
 })
 
-const currentVersion = 'v3.0.0'
+const currentVersion = 'v4.0.0'
 const hasUpdate = ref(false)
 let getUpdateErrorCount = 1;
 const {t, locale} = useI18n();
@@ -844,13 +1007,16 @@ const accountStore = useAccountStore();
 const userStore = useUserStore();
 const editTitleShow = ref(false)
 const resendTokenFormShow = ref(false)
+const selfHostedRelayShow = ref(false)
 const blackFormShow = ref(false)
+const autoCleanShow = ref(false)
 const aiCodeFilterShow = ref(false)
 const r2DomainShow = ref(false)
 const turnstileShow = ref(false)
 const tgSettingShow = ref(false)
 const noticePopupShow = ref(false)
 const thirdEmailShow = ref(false)
+const webhookShow = ref(false)
 const forwardRulesShow = ref(false)
 const emailPrefixShow = ref(false)
 const showResendList = ref(false)
@@ -861,10 +1027,12 @@ const editTitle = ref('')
 const settingLoading = ref(false)
 const clearS3Loading = ref(false)
 const r2DomainInput = ref('')
+const relayUrlInput = ref('')
 const loginOpacity = ref(0)
-const loginDarkenFactor = ref(0)
 const minEmailPrefix = ref(0)
 const emailPrefixFilter = ref([])
+const autoCleanDays = ref(0)
+const autoCleanExclude = ref([])
 const backgroundUrl = ref('')
 let backgroundFile = {}
 const showSetBackground = ref(false)
@@ -881,6 +1049,20 @@ const resendTokenForm = reactive({
 const turnstileForm = reactive({
   siteKey: '',
   secretKey: ''
+})
+
+const oauthPlatforms = [
+  { key: 'google', label: 'Google', icon: 'devicon:google', iconType: 'iconify' },
+  { key: 'github', label: 'GitHub', icon: 'codicon:github-inverted', iconType: 'iconify' },
+  { key: 'linuxdo', label: 'LinuxDo', icon: '/image/linuxdo.webp', iconType: 'image' },
+]
+const oauthSettingShow = ref(false)
+const oauthForm = reactive({
+  key: '',
+  label: '',
+  clientId: '',
+  clientSecret: '',
+  switch: 1,
 })
 
 const s3 = reactive({
@@ -931,6 +1113,23 @@ const tgBotStatus = ref(0)
 const tgBotToken = ref('')
 const forwardEmail = ref([])
 const forwardStatus = ref(0)
+const webhookUrl = ref('')
+const webhookStatus = ref(1)
+const webhookRetry = ref(0)
+const webhookSecret = ref('')
+const webhookFormatShow = ref(false)
+const webhookPayloadExample = `{
+  "emailId": 1,
+  "sendEmail": "hello@example.com",
+  "sendName": "hello",
+  "toEmail": "admin@example.com",
+  "toName": "admin",
+  "subject": "Hello",
+  "text": "Hello",
+  "content": "<div>Hello</div>",
+  "code": "123456",
+  "createTime": "2099-12-30 23:59:59"
+}`
 const emailColumnWidth = ref(0)
 const tokenColumnWidth = ref(0)
 const ruleType = ref(0)
@@ -943,6 +1142,12 @@ const tgMsgFromOption = [{label: t('show'), value: 'show'}, {label: t('hide'), v
 const tgMsgToOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
 const tgMsgTextOption = [{label: t('show'), value: 'show'}, {label: t('hide'), value: 'hide'}]
 const tgMsgLabelWidth = computed(() => locale.value === 'en' ? '120px' : '100px');
+const mailEngineOptions = computed(() => [
+  {label: t('mailEngineAuto'), value: 'auto'},
+  {label: t('cloudflareEmailSending'), value: 'cloudflare'},
+  {label: 'Resend', value: 'resend'},
+  {label: t('selfHostedRelay'), value: 'self_hosted'},
+])
 
 getSettings()
 getUpdate()
@@ -951,15 +1156,16 @@ function getSettings() {
   settingReady.value = false
   settingQuery().then(settingData => {
     setting.value = settingData
+    setting.value.mailEngine = setting.value.mailEngine || 'auto'
     settingStore.domainList = settingData.domainList;
     resendTokenForm.domain = setting.value.domainList[0]
     loginOpacity.value = setting.value.loginOpacity
-    loginDarkenFactor.value = normalizeFactor(setting.value.loginDarkenFactor)
     minEmailPrefix.value = setting.value.minEmailPrefix
     firstLoading.value = false
     backgroundUrl.value = setting.value.background?.startsWith('http') ? setting.value.background : ''
     editTitle.value = setting.value.title
     r2DomainInput.value = setting.value.r2Domain
+    relayUrlInput.value = setting.value.relayUrl || ''
     addVerifyCount.value = setting.value.addVerifyCount
     regVerifyCount.value = setting.value.regVerifyCount
     resetNoticeForm()
@@ -1021,8 +1227,8 @@ const resendList = computed(() => {
 
 function getUpdate() {
   if (getUpdateErrorCount > 5 || !getUpdateErrorCount) return
-  axios.get('https://api.github.com/repos/maillab/cloud-mail/releases/latest').then(({data}) => {
-    hasUpdate.value = data.name !== currentVersion
+  axios.get('https://api.github.com/repos/GUSHU101/longos-cloud-mail/releases/latest').then(({data}) => {
+    hasUpdate.value = (data.tag_name || data.name) !== currentVersion
     getUpdateErrorCount = 0
   }).catch(e => {
     getUpdateErrorCount++
@@ -1117,8 +1323,24 @@ function openThirdEmailSetting() {
   thirdEmailShow.value = true
 }
 
+function openWebhookSetting() {
+  webhookStatus.value = setting.value.webhookStatus
+  webhookUrl.value = setting.value.webhookUrl || ''
+  webhookRetry.value = setting.value.webhookRetry ?? 0
+  webhookSecret.value = setting.value.webhookSecret || ''
+  webhookShow.value = true
+}
+
 function openEmailPrefix() {
   emailPrefixShow.value = true
+}
+
+function openAutoClean() {
+  autoCleanDays.value = setting.value.autoCleanDays ?? 0
+  autoCleanExclude.value = setting.value.autoCleanExclude
+      ? setting.value.autoCleanExclude.split(',').filter(Boolean)
+      : []
+  autoCleanShow.value = true
 }
 
 function openForwardRules() {
@@ -1224,6 +1446,29 @@ function forwardEmailSave() {
   editSetting(form)
 }
 
+function webhookSave() {
+  let retry = Number(webhookRetry.value)
+  if (isNaN(retry) || retry < 0) {
+    retry = 0
+  }
+  const url = toOssDomain(webhookUrl.value.trim())
+  if (isIpUrl(url)) {
+    ElMessage({
+      message: t('webhookIpNotSupported'),
+      type: 'warning',
+      plain: true
+    })
+    return
+  }
+  const form = {
+    webhookStatus: webhookStatus.value,
+    webhookUrl: url,
+    webhookRetry: retry,
+    webhookSecret: webhookSecret.value.trim()
+  }
+  editSetting(form)
+}
+
 
 function ruleEmailSave() {
   const form = {
@@ -1240,19 +1485,6 @@ function doOpacityChange() {
   editSetting(form, true)
 }
 
-function normalizeFactor(value) {
-  const factor = Number(value ?? 0)
-  if (Number.isNaN(factor)) return 0
-  return Math.min(1, Math.max(0, factor))
-}
-
-function doDarkenChange() {
-  if (!settingReady.value) return
-  const form = {}
-  form.loginDarkenFactor = normalizeFactor(loginDarkenFactor.value)
-  editSetting(form, true)
-}
-
 function resetEmailPrefix() {
   minEmailPrefix.value = setting.value.minEmailPrefix
   emailPrefixFilter.value = setting.value.emailPrefixFilter
@@ -1262,6 +1494,13 @@ function resetBlackList() {
   blackListForm.value.blackFrom = setting.value.blackFrom ? setting.value.blackFrom.split(',') : []
   blackListForm.value.blackContent = setting.value.blackContent ? setting.value.blackContent.split(',') : []
   blackListForm.value.blackSubject = setting.value.blackSubject ? setting.value.blackSubject.split(',') : []
+}
+
+function resetAutoClean() {
+  autoCleanDays.value = setting.value.autoCleanDays ?? 0
+  autoCleanExclude.value = setting.value.autoCleanExclude
+      ? setting.value.autoCleanExclude.split(',').filter(Boolean)
+      : []
 }
 
 function resetAiCodeFilter() {
@@ -1275,16 +1514,18 @@ function saveEmailPrefix() {
   editSetting(form, true)
 }
 
+function saveAutoClean() {
+  editSetting({
+    autoCleanDays: autoCleanDays.value,
+    autoCleanExclude: autoCleanExclude.value.join(',')
+  }, true)
+}
+
 function saveAiCodeFilter() {
   editSetting({aiCodeFilter: aiCodeFilter.value + ''})
 }
 
 const opacityChange = debounce(doOpacityChange, 1000, {
-  leading: false,
-  trailing: true
-})
-
-const darkenChange = debounce(doDarkenChange, 1000, {
   leading: false,
   trailing: true
 })
@@ -1326,6 +1567,20 @@ function banEmailAddTag(val) {
   })
 }
 
+function autoCleanExcludeAddTag(val) {
+  const emails = Array.from(new Set(
+      val.split(/[,，]/).map(item => item.trim()).filter(item => item)
+  ));
+
+  autoCleanExclude.value.splice(autoCleanExclude.value.length - 1, 1)
+
+  emails.forEach(email => {
+    if (isEmail(email) && !autoCleanExclude.value.includes(email)) {
+      autoCleanExclude.value.push(email)
+    }
+  })
+}
+
 function aiCodeFilterAddTag(val) {
   const emails = Array.from(new Set(
       val.split(/[,，]/).map(item => item.trim()).filter(item => item)
@@ -1359,6 +1614,23 @@ function delBackground() {
   })
 }
 
+function openOauthSetting(p) {
+  oauthForm.key = p.key
+  oauthForm.label = p.label
+  oauthForm.clientId = setting.value[p.key + 'ClientId'] || ''
+  oauthForm.clientSecret = setting.value[p.key + 'ClientSecret'] || ''
+  oauthForm.switch = setting.value[p.key + 'Switch'] ?? 1
+  oauthSettingShow.value = true
+}
+
+function saveOauth() {
+  const form = {}
+  form[oauthForm.key + 'ClientId'] = oauthForm.clientId
+  form[oauthForm.key + 'ClientSecret'] = oauthForm.clientSecret
+  form[oauthForm.key + 'Switch'] = oauthForm.switch
+  editSetting(form)
+}
+
 function saveTurnstileKey() {
   const settingForm = {}
   settingForm.siteKey = turnstileForm.siteKey
@@ -1367,6 +1639,8 @@ function saveTurnstileKey() {
 }
 
 async function saveBackground() {
+
+  if (settingLoading.value) return
 
   let image = ''
 
@@ -1424,6 +1698,15 @@ function saveR2domain() {
 
 function openResendForm() {
   resendTokenFormShow.value = true
+}
+
+function openSelfHostedRelay() {
+  relayUrlInput.value = setting.value.relayUrl || ''
+  selfHostedRelayShow.value = true
+}
+
+function saveSelfHostedRelay() {
+  editSetting({relayUrl: relayUrlInput.value.trim()})
 }
 
 function openBlackListForm() {
@@ -1510,9 +1793,11 @@ function editSetting(settingForm, refreshStatus = true) {
     editTitleShow.value = false
     r2DomainShow.value = false
     resendTokenFormShow.value = false
+    selfHostedRelayShow.value = false
     turnstileShow.value = false
     tgSettingShow.value = false
     thirdEmailShow.value = false
+    webhookShow.value = false
     forwardRulesShow.value = false
     addVerifyCountShow.value = false
     regVerifyCountShow.value = false
@@ -1520,9 +1805,10 @@ function editSetting(settingForm, refreshStatus = true) {
     addS3Show.value = false
     emailPrefixShow.value = false
     aiCodeFilterShow.value = false
+    autoCleanShow.value = false
+    oauthSettingShow.value = false
   }).catch((e) => {
     loginOpacity.value = setting.value.loginOpacity
-    loginDarkenFactor.value = normalizeFactor(setting.value.loginDarkenFactor)
     setting.value = {...setting.value, ...JSON.parse(backup)}
   }).finally(() => {
     settingLoading.value = false
@@ -1535,7 +1821,7 @@ function editSetting(settingForm, refreshStatus = true) {
 .settings-container {
   height: 100%;
   overflow: hidden;
-  background: var(--extra-light-fill) !important;
+  background: var(--settings-page-background) !important;
   position: relative;
 
   .loading {
@@ -1579,14 +1865,11 @@ function editSetting(settingForm, refreshStatus = true) {
 }
 
 .card-grid {
-
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 20px;
   gap: 20px;
-  @media (max-width: 500px) {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  }
   @media (max-width: 1023px) {
     gap: 15px;
     padding: 15px;
@@ -1616,17 +1899,19 @@ function editSetting(settingForm, refreshStatus = true) {
 
 .settings-card {
   background-color: var(--el-bg-color);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--el-border-color);
   transition: all 300ms;
   overflow: hidden;
+  max-width: 900px;
+  width: 100%;
 }
 
 
 .card-title {
   font-size: 15px;
   font-weight: bold;
-  padding: 10px 20px;
+  padding: 15px 20px 12px;
   border-bottom: 1px solid var(--el-border-color);
 }
 
@@ -1655,6 +1940,14 @@ function editSetting(settingForm, refreshStatus = true) {
     justify-items: flex-end;
     font-weight: normal;
   }
+}
+
+.oauth-icon {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px;
+  flex-shrink: 0;
+  margin-right: 2px;
 }
 
 .r2domain-item {
@@ -1699,6 +1992,29 @@ function editSetting(settingForm, refreshStatus = true) {
 .dialog-footer {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+}
+
+.webhook-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.webhook-format-title {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  color: var(--el-color-primary);
+  font-size: 13px;
+}
+
+.webhook-format-icon {
+  transition: transform 0.2s;
+  &.open {
+    transform: rotate(180deg);
+  }
 }
 
 .notice-popup-item {
@@ -1857,6 +2173,19 @@ function editSetting(settingForm, refreshStatus = true) {
     .el-select {
       width: v-bind(tgMsgLabelWidth);
     }
+    .el-input-number {
+      width: 120px;
+    }
+  }
+
+  .webhook-format pre {
+    margin: 8px 0 0;
+    padding: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    border-radius: 4px;
+    background: var(--el-fill-color-light);
   }
 }
 
