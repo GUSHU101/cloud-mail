@@ -67,6 +67,8 @@ MAIL_RELAY_PLATFORM_SENDER_DOMAIN=example.com \
 
 选择 Docker/Nginx 或 Docker/Apache 模式。Docker 是一体化邮件引擎的受支持部署方式；纯宝塔或手工 LNMP 路径不会安装内置邮件服务器。
 
+> 如果现有站点是宝塔/LNMP 部署，访问 `/_longos/mail-relay/health` 返回 404 表示中继尚未安装，不是 Cloud Mail 地址填写错误。在该健康检查返回 200 前，不要配置 `LONGOS_RELAY_URL`，否则 Cloud Mail 的自建发信会必然失败。
+
 安装器会自动生成并写入 `.env`：
 
 ```text
@@ -151,7 +153,15 @@ Settings -> Secrets and variables -> Actions
 
 `RELAY_SHARED_SECRET` 必须与 LONGOS 的 Cloud Mail 专用密钥逐字一致，不能填 `MAIL_RELAY_SHARED_SECRET`。工作流会把该值直接写入 Cloudflare Worker Secret，不会放入 `wrangler.toml`、网页或数据库。
 
-## 6. 部署指定 GitHub 分支
+首次部署可以不填 `D1_DATABASE_ID` 和 `KV_NAMESPACE_ID`；工作流会优先查找与 `NAME` 同名的现有资源，不存在时才创建。已有生产数据时，建议显式填写原 D1/KV ID，避免绑定到新资源。
+
+`LONGOS_RELAY_URL` 和 `RELAY_SHARED_SECRET` 必须成对配置。只有以下命令成功后才应填写：
+
+```bash
+curl -fsS https://admin.example.com/_longos/mail-relay/health
+```
+
+## 6. 从 GitHub 部署功能分支
 
 当前功能分支：
 
@@ -159,22 +169,39 @@ Settings -> Secrets and variables -> Actions
 feature/self-hosted-mail-engine
 ```
 
+GitHub Actions 只会在默认分支上注册可手动运行的工作流。因此仓库的 `main` 分支提供 `Deploy self-hosted mail engine` 入口，它会调用功能分支中的部署工作流，并显式检出 `feature/self-hosted-mail-engine`。
+
 GitHub 页面操作：
 
 1. 进入 `Actions`；
-2. 选择 `Deploy cloud-mail to Cloudflare Workers`；
+2. 选择 `Deploy self-hosted mail engine`；
 3. 点击 `Run workflow`；
-4. 分支选择 `feature/self-hosted-mail-engine`；
-5. 等待构建、Worker 部署、Secret 写入和数据库初始化全部成功。
+4. 运行入口保持 `main`，不要改选功能分支；
+5. 等待构建、D1/KV 绑定、Worker 生产部署、Secret 写入和数据库初始化全部成功。
 
 也可以使用 GitHub CLI：
 
 ```bash
-gh workflow run deploy-cloudflare.yml --ref feature/self-hosted-mail-engine
+gh workflow run deploy-self-hosted-mail-engine.yml --ref main
 gh run watch --exit-status
 ```
 
-该工作流只在推送到 `main` 且修改 `mail-worker` 或 `mail-vue` 时自动部署；功能分支应手动触发，避免测试提交直接覆盖生产 Worker。
+功能分支不会因为 Cloudflare 页面显示“构建就绪”而自动进入生产。Cloudflare Git Builds 对非生产分支默认执行：
+
+```text
+npx wrangler versions upload
+```
+
+该命令只创建预览版本，日志中出现 `Version Preview URL` 不等于已替换生产流量。一体化部署请使用上述 GitHub Actions 入口；它会生成带 D1、KV、R2、自定义域和 LONGOS 中继配置的 `wrangler-action.toml`，然后执行真正的 `wrangler deploy`。
+
+部署后立即验证：
+
+```bash
+curl -fsS https://mail.example.com/ >/dev/null
+curl -fsS https://mail.example.com/api/health
+```
+
+再打开 Cloud Mail 的“系统设置”，确认页面已出现邮件引擎和 LONGOS 中继配置。
 
 ## 7. Cloud Mail 与 LONGOS 后台设置
 
